@@ -26,7 +26,7 @@ A busy pet owner needs help staying consistent with pet care. They want an assis
 - **Remembers your data.** Pets and tasks are saved to `data.json` automatically (`Owner.save_to_json`) and loaded the next time (`Owner.load_from_json`). A damaged file is set aside, never overwritten. See [Data persistence](#-data-persistence).
 - **Easy to read.** An emoji for each kind of pet and task (🐶 🐱, 💊 🐕 🍖 🎾 🛁), color-coded priority (🔴 🟡 🟢) and status (✅ scheduled, ⛔ not scheduled, 🚨 required task left out), a red REQUIRED tag, green / blue / red task status (done / starts later / overdue), and aligned tables in both the app and the terminal.
 - **Safe input.** Blank names, non-positive durations, impossible day windows and duplicate pets are rejected with a clear message.
-- **Tested.** 539 automated tests cover the backend, the app, the formatting, the demo, the class diagram and the Care Assistant.
+- **Tested.** 566 automated tests cover the backend, the app, the formatting, the demo, the class diagram and the Care Assistant.
 
 ## 🏆 Extra-credit challenges
 
@@ -56,7 +56,7 @@ New to the app? Open it and press **Load sample data** to get two pets and eight
 
 ## 🧩 Implementation Summary
 
-**What was built.** The backend is in [pawpal_system.py](pawpal_system.py): a small domain model plus a `Scheduler` that turns it into a one-day plan with a reason for every decision. [main.py](main.py) is a command-line demo, [app.py](app.py) is the Streamlit UI, connected to those classes. The pytest suite (539 tests) is in [tests/](tests/): the backend ([test_pawpal.py](tests/test_pawpal.py)), the real app run headlessly ([test_app.py](tests/test_app.py)), the display formatting ([test_display.py](tests/test_display.py)), the command-line demo ([test_main.py](tests/test_main.py)) and the diagram ([test_uml.py](tests/test_uml.py)). [display.py](display.py) turns results into emoji, color-coded badges and tables for both the app and the terminal. The final class diagram is [diagrams/uml_final.mmd](diagrams/uml_final.mmd) (Mermaid source; `tests/test_uml.py` checks it against the code). The picture below is a rendering of it.
+**What was built.** The backend is in [pawpal_system.py](pawpal_system.py): a small domain model plus a `Scheduler` that turns it into a one-day plan with a reason for every decision. [main.py](main.py) is a command-line demo, [app.py](app.py) is the Streamlit UI, connected to those classes. The pytest suite (566 tests) is in [tests/](tests/): the backend ([test_pawpal.py](tests/test_pawpal.py)), the real app run headlessly ([test_app.py](tests/test_app.py)), the display formatting ([test_display.py](tests/test_display.py)), the command-line demo ([test_main.py](tests/test_main.py)) and the diagram ([test_uml.py](tests/test_uml.py)). [display.py](display.py) turns results into emoji, color-coded badges and tables for both the app and the terminal. The final class diagram is [diagrams/uml_final.mmd](diagrams/uml_final.mmd) (Mermaid source; `tests/test_uml.py` checks it against the code). The picture below is a rendering of it.
 
 ![PawPal+ class diagram](diagrams/uml_final.png)
 
@@ -208,7 +208,7 @@ python -m pytest
 
 `pytest.ini` points pytest at `tests/` and the project root, so no other setup is needed. To run one file, name it (for example `python -m pytest tests/test_pawpal.py`); add `-v` to list each test.
 
-**What the tests cover.** There are 539 tests: 208 on the backend (`tests/test_pawpal.py`), 50 that drive the real Streamlit app headlessly (`tests/test_app.py`), 37 on the emoji, badges and tables (`tests/test_display.py`), 15 that check the UML diagram against the code (`tests/test_uml.py`), 4 that run the command-line demo (`tests/test_main.py`) and 225 on the Care Assistant (`tests/test_ai_assistant.py`, `tests/test_retriever.py`, `tests/test_guardrails.py`, `tests/test_app_assistant.py`, `tests/test_main_assistant.py`, `tests/test_display_assistant.py`, `tests/test_evaluate.py`, `tests/test_dotenv.py`; all offline). They check these core behaviors, each with happy paths and edge cases:
+**What the tests cover.** There are 566 tests: 208 on the backend (`tests/test_pawpal.py`), 50 that drive the real Streamlit app headlessly (`tests/test_app.py`), 37 on the emoji, badges and tables (`tests/test_display.py`), 15 that check the UML diagram against the code (`tests/test_uml.py`), 4 that run the command-line demo (`tests/test_main.py`) and 252 on the Care Assistant (`tests/test_ai_assistant.py`, `tests/test_retriever.py`, `tests/test_guardrails.py`, `tests/test_app_assistant.py`, `tests/test_main_assistant.py`, `tests/test_display_assistant.py`, `tests/test_evaluate.py`, `tests/test_dotenv.py`, `tests/test_ai_assistant_errors.py`; all offline). They check these core behaviors, each with happy paths and edge cases:
 
 | Core behavior | Happy path | Edge cases |
 |---|---|---|
@@ -238,7 +238,7 @@ rootdir: /home/dev/ai110-module2show-pawpal-starter
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.15.1
-collected 539 items
+collected 566 items
 
 tests/test_app.py ..................................................     [ 15%]
 tests/test_display.py .....................................              [ 27%]
@@ -249,12 +249,12 @@ tests/test_pawpal.py ................................................... [ 45%]
 .............                                                            [ 95%]
 tests/test_uml.py ...............                                        [100%]
 
-============================= 539 passed in 8.3s ==============================
+============================= 566 passed in 8.3s ==============================
 ```
 
 **Confidence level: ★★★★☆ (4 out of 5).**
 
-Why it is high: every one of the 539 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
+Why it is high: every one of the 566 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
 
 Why it is not 5: the tests were written by the same AI assistant that wrote the code, so they can share its blind spots (injecting deliberate bugs reduces this but does not remove it); the UI is tested headlessly and in screenshots, and has had only a brief hand check in a browser; the data file is single-user and local; the planner is greedy by design, so tests prove its plans are valid, not that they are the best possible; and overnight days, time zones and seconds in times are not supported (seconds are truncated, and a test documents that). Code coverage has not been measured.
 
@@ -537,7 +537,7 @@ evaluate.py           runs the Care Assistant on predefined scenarios and writes
 evaluation_log.txt    the log of the last evaluation run (see above)
 ai_assistant.py       the Care Assistant: plans needs, retrieves from knowledge/, proposes strict-JSON tasks, self-checks
 knowledge/            the Care Assistant's local knowledge base (markdown care guides with a tag header)
-tests/                test_pawpal.py, test_app.py, test_display.py, test_main.py, test_uml.py, test_ai_assistant.py, test_retriever.py, test_guardrails.py, test_app_assistant.py, test_main_assistant.py, test_display_assistant.py, test_evaluate.py, test_dotenv.py
+tests/                test_pawpal.py, test_app.py, test_display.py, test_main.py, test_uml.py, test_ai_assistant.py, test_retriever.py, test_guardrails.py, test_app_assistant.py, test_main_assistant.py, test_display_assistant.py, test_evaluate.py, test_dotenv.py, test_ai_assistant_errors.py
 diagrams/             uml_final.mmd (Mermaid source), uml_final.png (rendering), uml.mmd (identical older copy)
 screenshots/          the UI screenshots shown above
 data.json             your saved pets and tasks (created by the app; not in git)
