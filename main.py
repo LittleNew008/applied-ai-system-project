@@ -1,13 +1,17 @@
 """Demo: build an owner with two pets, then show sorting, filtering, conflict warnings, the next free
 slot, today's schedule, recurring tasks and saving to data.json in the terminal.
 
-Run from the project root:  python main.py
+Run from the project root:  python main.py            (the demo)
+                            python main.py assist     (the Care Assistant: suggest tasks, pick, add)
 """
 
+import argparse
 import tempfile
+from collections.abc import Callable
 from datetime import date, time
 from pathlib import Path
 
+import ai_assistant
 import display
 from pawpal_system import Category, DailyPlan, Owner, Pet, PetTask, Priority, Recurrence, Scheduler, Task
 
@@ -143,5 +147,181 @@ def main() -> None:
               f"identical to the original: {loaded == owner}")
 
 
-if __name__ == "__main__":
+# ---------------------------------------------------------------- Care Assistant (command line)
+
+def default_picks(result: ai_assistant.AssistantResult) -> list[int]:
+    """The suggestions (1-based) that start ticked: not required, and confident enough. Same rule as the app."""
+    return [i for i, p in enumerate(result.accepted, 1)
+            if not p.required and p.confidence >= ai_assistant.LOW_CONFIDENCE]
+
+
+def parse_selection(text: str, count: int, default: list[int]) -> list[int]:
+    """Turn what the user typed into 1-based suggestion numbers.
+
+    Blank means `default`; "all" and "none" mean what they say; otherwise numbers separated by commas or spaces
+    ("1,3"), each from 1 to `count`. Raises ValueError with a readable message for anything else.
+    """
+    words = text.replace(",", " ").split()
+    if not words:
+        return list(default)
+    if len(words) == 1 and words[0].lower() in ("all", "a"):
+        return list(range(1, count + 1))
+    if len(words) == 1 and words[0].lower() in ("none", "n", "0", "q", "quit"):
+        return []
+    picks = []
+    for word in words:
+        if not word.isdigit() or not 1 <= int(word) <= count:
+            raise ValueError(f"{word!r} is not a suggestion number from 1 to {count} (or 'all' / 'none')")
+        if int(word) not in picks:
+            picks.append(int(word))
+    return sorted(picks)
+
+
+def show_suggestions(pet: Pet, on: date, result: ai_assistant.AssistantResult, config: ai_assistant.AssistantConfig) -> None:
+    """Print what the assistant found: mode, needs, guides used, the table of suggestions, and any problems."""
+    print(f"{display.ASSISTANT_ICON} Care Assistant for {display.pet_label(pet)} - {on:%A, %B %d, %Y}")
+    if config.offline:
+        print(f"Mode: offline ({config.offline_reason}); suggestions come from the built-in care guides.")
+    else:
+        print(f"Mode: Gemini ({config.model}); the pet's details and task titles were sent to Google.")
+    if result.fell_back:
+        print(f"{display.CLASH_ICON} Gemini could not be used ({result.fallback_reason}); "
+              "these suggestions come from the built-in care guides.")
+    print(RULE)
+    print("Needs:")
+    for need in result.needs:
+        print(f"  - {need}")
+    if result.retrieved:
+        print("Care guides used:")
+        for chunk in result.retrieved:
+            print(f"  - {chunk.title} [{chunk.id}]")
+    print()
+    if not result.accepted:
+        print("Nothing new to suggest: the existing tasks already cover the usual care.")
+    else:
+        print(display.render_table(display.proposal_rows(result.accepted, result.retrieved, result.report),
+                                   wrap_column="Sources", wrap_width=34))
+        for number, p in enumerate(result.accepted, 1):
+            for problem in display.proposal_problems(p, result.report):
+                print(f"  {number}. {problem}")
+        for problem in display.general_problems(result.report):
+            print(f"  {problem}")
+        print(f"(Confidence: {ai_assistant.CONFIDENCE_WEIGHTS['model']:.0%} the model's own figure, "
+              f"{ai_assistant.CONFIDENCE_WEIGHTS['grounding']:.0%} guide support, "
+              f"{ai_assistant.CONFIDENCE_WEIGHTS['fit']:.0%} schedule fit. Required tasks are marked ⭐.)")
+    if result.rejected:
+        print("Left out:")
+        for rejection in result.rejected:
+            print(f"  - {rejection.reason}")
+    print(RULE)
+
+
+def choose_suggestions(result: ai_assistant.AssistantResult, accept: str | None,
+                       input_fn: Callable[[str], str]) -> list[int]:
+    """Which suggestions to add: `accept` if given (raises ValueError if it is invalid), else ask the user,
+    asking again up to three times after a mistake. End of input counts as "none"."""
+    default = default_picks(result)
+    count = len(result.accepted)
+    if accept is not None:
+        return parse_selection(accept, count, default)
+    prompt = (f"Add which? numbers like 1,3 | all | none | Enter = {', '.join(map(str, default)) or 'none'}: ")
+    for _ in range(3):
+        try:
+            return parse_selection(input_fn(prompt), count, default)
+        except ValueError as err:
+            print(f"  {err}")
+        except EOFError:
+            return []
+    print("  No valid choice, so nothing was added.")
+    return []
+
+
+def assistant_flow(owner: Owner, pet: Pet, on: date, *, accept: str | None = None,
+                   input_fn: Callable[[str], str] = input,
+                   config: ai_assistant.AssistantConfig | None = None) -> list[Task]:
+    """Suggest tasks for `pet`, let the user choose, add the chosen ones, and show the new schedule.
+
+    The same steps as the app's Care Assistant panel. `accept` ("all", "none", "1,3", or "" for the default)
+    skips the question. Chosen suggestions are added with `ai_assistant.commit`, which uses `Pet.add_task`.
+    Returns the tasks added.
+    """
+    config = config or ai_assistant.AssistantConfig.from_env()
+    try:
+        result = ai_assistant.propose_care_plan(owner, pet, on, config=config)
+    except ai_assistant.InvalidPetData as err:
+        print(f"{display.ASSISTANT_ICON} Care Assistant was not asked: {pet.name}'s details need fixing:")
+        for problem in err.problems:
+            print(f"  {display.CLASH_ICON} {problem}")
+        return []
+    show_suggestions(pet, on, result, config)
+    if not result.accepted:
+        return []
+
+    picks = choose_suggestions(result, accept, input_fn)
+    if not picks:
+        print("Nothing added.")
+        return []
+    created = ai_assistant.commit(owner, pet, result, [result.accepted[i - 1].title for i in picks], on)
+    print(f"{display.DONE_ICON} Added {len(created)} task(s) to {pet.name}: " + ", ".join(t.title for t in created))
+    print()
+    print_schedule(owner, Scheduler(owner).generate_plan(on))
+    print(f"(Full step log of this run: {config.trace_path.name}, run id {result.trace_id}.)")
+    return created
+
+
+def run_assist(args: argparse.Namespace) -> int:
+    """`python main.py assist`: load the owner, pick the pet, run the flow, and save if --data was given."""
+    if args.data:
+        try:
+            owner = Owner.load_from_json(args.data)
+        except FileNotFoundError:
+            print(f"No such data file: {args.data}")
+            return 1
+        except ValueError as err:
+            print(f"Could not read {args.data}: {err}")
+            return 1
+    else:
+        owner = build_owner()  # the demo owner; nothing is saved
+    if not owner.pets:
+        print("This owner has no pets yet; add one first.")
+        return 1
+    if args.pet:
+        pet = next((p for p in owner.pets if p.name.casefold() == args.pet.casefold()), None)
+        if pet is None:
+            print(f"No pet named {args.pet!r}. Pets: {', '.join(p.name for p in owner.pets)}")
+            return 1
+    else:
+        pet = owner.pets[0]
+    try:
+        created = assistant_flow(owner, pet, args.date, accept=args.accept)
+    except ValueError as err:  # a bad --accept value
+        print(f"Invalid --accept: {err}")
+        return 2
+    if created and args.data:
+        owner.save_to_json(args.data)
+        print(f"{display.SAVED_ICON} Saved to {args.data}.")
+    return 0
+
+
+def cli(argv: list[str] | None = None) -> int:
+    """Command line entry point: no command runs the demo; `assist` runs the Care Assistant."""
+    parser = argparse.ArgumentParser(prog="main.py", description="PawPal+ command-line demo and Care Assistant.")
+    commands = parser.add_subparsers(dest="command")
+    commands.add_parser("demo", help="the scheduler demo (the default)")
+    assist = commands.add_parser("assist", help="get task suggestions for a pet, choose, and add them")
+    assist.add_argument("--pet", help="the pet's name (default: the first pet)")
+    assist.add_argument("--data", help="a data.json to load, and to save back to if you add tasks "
+                                       "(default: the demo owner, nothing saved)")
+    assist.add_argument("--accept", help='skip the question: "all", "none", numbers like "1,3", or "" for the default')
+    assist.add_argument("--date", type=date.fromisoformat, default=date.today(), metavar="YYYY-MM-DD",
+                        help="the day to plan for (default: today)")
+    args = parser.parse_args(argv)
+    if args.command == "assist":
+        ai_assistant.load_env_file()  # the Gemini key and other settings from the git-ignored .env, if there is one
+        return run_assist(args)
     main()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())

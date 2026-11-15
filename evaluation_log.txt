@@ -1,0 +1,334 @@
+PawPal+ Care Assistant evaluation
+Run at: 2026-11-15 23:02:37 UTC    Plan date: 2026-03-02    Mode: offline (evaluation default)
+==============================================================================
+╭─────┬───────────────────────────────────────────┬──────────┬─────────┬────────────┬──────────┬──────────────┬──────────┬─────────╮
+│ #   │ Scenario                                  │ Result   │ Props   │ Rejected   │ Schema   │ Confidence   │ Checks   │ Notes   │
+├─────┼───────────────────────────────────────────┼──────────┼─────────┼────────────┼──────────┼──────────────┼──────────┼─────────┤
+│ 1   │ Healthy adult dog, no tasks               │ ✅ PASS  │ 7       │ 0          │ ✅ 2/2   │ 95% / 95%    │ 9/9      │         │
+│ 2   │ Cat with a partial routine                │ ✅ PASS  │ 2       │ 0          │ ✅ 2/2   │ 95% / 95%    │ 9/9      │         │
+│ 3   │ Senior dog on medication                  │ ✅ PASS  │ 8       │ 1          │ ✅ 2/2   │ 87% / 93%    │ 9/9      │         │
+│ 4   │ Bare-minimum pet (edge: nothing to go on) │ ✅ PASS  │ 0       │ 0          │ ✅ 2/2   │ -            │ 9/9      │         │
+│ 5   │ Over-capacity day (edge)                  │ ✅ PASS  │ 2       │ 0          │ ✅ 3/3   │ 95% / 95%    │ 10/10    │         │
+│ 6   │ Impossible required task (edge)           │ ✅ PASS  │ 1       │ 0          │ ✅ 3/3   │ 95% / 95%    │ 10/10    │         │
+│ 7   │ Model answers badly twice                 │ ✅ PASS  │ 7       │ 0          │ ✅ 3/5   │ 95% / 95%    │ 10/10    │         │
+│ 8   │ Invalid pet data (guardrail)              │ ✅ PASS  │ -       │ -          │ -        │ -            │ 3/3      │         │
+╰─────┴───────────────────────────────────────────┴──────────┴─────────┴────────────┴──────────┴──────────────┴──────────┴─────────╯
+Schema: ✅/❌ for the last model reply, then valid/total replies (needs, proposals and repairs). Confidence: lowest / average of the accepted proposals.
+8/8 scenarios passed
+==============================================================================
+
+1. Healthy adult dog, no tasks: ✅ PASS
+   Scenario:  A four-year-old dog with no tasks at all.
+   Expected:  Suggests walks, feeding, play and grooming, all with high confidence.
+   Checks:
+     ✅ the last model reply matched the schema  (2/2 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ covers walk, feeding, play and grooming  (got ['enrichment', 'feeding', 'grooming', 'walk'])
+     ✅ all proposals are high confidence (75%+)  (lowest 95%)
+     ✅ no required task is invented
+   Proposals:
+     ╭─────┬──────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────╮
+     │ #   │ Task                 │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                        │
+     ├─────┼──────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────┤
+     │ 1   │ 🐕 Morning walk      │    30 │ 🔴 High    │ prefers 07:30 │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:30 │ Daily exercise for dogs [dog-  │
+     │     │                      │       │            │               │           │              │             │ exercise]                      │
+     │ 2   │ 🐕 Evening walk      │    20 │ 🟡 Medium  │ prefers 18:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 18:00 │ Daily exercise for dogs [dog-  │
+     │     │                      │       │            │               │           │              │             │ exercise]                      │
+     │ 3   │ 🎾 Fetch or tug play │    15 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:00 │ Daily exercise for dogs [dog-  │
+     │     │                      │       │            │               │           │              │             │ exercise]                      │
+     │ 4   │ 🍖 Breakfast feeding │    10 │ 🔴 High    │ prefers 08:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 08:00 │ Feeding routine for dogs [dog- │
+     │     │                      │       │            │               │           │              │             │ feeding]                       │
+     │ 5   │ 🍖 Dinner feeding    │    10 │ 🔴 High    │ prefers 17:30 │ 🔁 daily  │ 🟢 95%       │ ✅ at 17:30 │ Feeding routine for dogs [dog- │
+     │     │                      │       │            │               │           │              │             │ feeding]                       │
+     │ 6   │ 🛁 Brush coat        │    10 │ 🟢 Low     │ any time      │ 🔁 weekly │ 🟢 95%       │ ✅ at 07:20 │ Grooming and hygiene for dogs  │
+     │     │                      │       │            │               │           │              │             │ [dog-grooming]                 │
+     │ 7   │ 🛁 Tooth brushing    │     5 │ 🟢 Low     │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:15 │ Grooming and hygiene for dogs  │
+     │     │                      │       │            │               │           │              │             │ [dog-grooming]                 │
+     ╰─────┴──────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────╯
+   Step log:
+      1. [control] config  model="offline"  offline=true  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 0}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="offline"  prompt_chars=490  response_chars=211
+           raw: {"needs": ["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "D...
+      4. [plan] plan_needs  needs=["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "Dog needs grooming and hygiene"]  query_terms=["dog", "walk", "feeding", "enrichment", "groo...
+      5. [retrieve] retrieve  query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise for dogs", "score": 6.0}, {"id": "dog-feeding", "title": "Feeding routine...
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="offline"  prompt_chars=3572  response_chars=2710
+           raw: {"proposals": [{"category": "walk", "confidence": 0.9, "description": "A brisk walk to burn energy and give th...
+      7. [act] parse  proposals=7  rejected=0
+      8. [act] validate  accepted=["Morning walk", "Evening walk", "Fetch or tug play", "Breakfast feeding", "Dinner feeding", "Brush coat", "Tooth brushing"]  rejected=[]
+      9. [check] self_check  ok=true  issues=[]  scheduled_minutes=100
+     10. [check] score  proposals=[{"title": "Morning walk", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}, {"title": "Evening walk", "confidence": 0.95, "detail": "model 90%, guide support...
+     11. [check] result  accepted=[{"title": "Morning walk", "confidence": 0.95}, {"title": "Evening walk", "confidence": 0.95}, {"title": "Fetch or tug play", "confidence": 0.95}, {"title": "Breakfast feeding", "confidence":...
+
+2. Cat with a partial routine: ✅ PASS
+   Scenario:  A cat that already has a feeding task.
+   Expected:  Does not repeat feeding; suggests play and grooming from cat guides only.
+   Checks:
+     ✅ the last model reply matched the schema  (2/2 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ does not repeat the existing feeding task
+     ✅ suggests play and grooming instead  (got ['Brush fur', 'Interactive play session'])
+     ✅ only cat-appropriate guides are cited
+   Proposals:
+     ╭─────┬─────────────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────────╮
+     │ #   │ Task                        │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                            │
+     ├─────┼─────────────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────────┤
+     │ 1   │ 🛁 Brush fur                │    10 │ 🟢 Low     │ any time      │ 🔁 weekly │ 🟢 95%       │ ✅ at 07:05 │ Grooming and litter care for cats  │
+     │     │                             │       │            │               │           │              │             │ [cat-grooming]                     │
+     │ 2   │ 🎾 Interactive play session │    15 │ 🟡 Medium  │ prefers 19:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 19:00 │ Play and enrichment for cats [cat- │
+     │     │                             │       │            │               │           │              │             │ play]                              │
+     ╰─────┴─────────────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────────╯
+   Step log:
+      1. [control] config  model="offline"  offline=true  reason="evaluation default"  species="cat"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "cat", "age": 3, "special_needs_chars": 0}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="offline"  prompt_chars=634  response_chars=128
+           raw: {"needs": ["Cat needs play and enrichment", "Cat needs grooming and hygiene"], "query_terms": ["cat", "enrichm...
+      4. [plan] plan_needs  needs=["Cat needs play and enrichment", "Cat needs grooming and hygiene"]  query_terms=["cat", "enrichment", "grooming"]  focus_categories=["enrichment", "grooming"]
+      5. [retrieve] retrieve  query_terms=["cat", "enrichment", "grooming"]  chunks=[{"id": "cat-grooming", "title": "Grooming and litter care for cats", "score": 4.0}, {"id": "cat-play", "title": "Play and enrichment for cat...
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="offline"  prompt_chars=2989  response_chars=879
+           raw: {"proposals": [{"category": "grooming", "confidence": 0.9, "description": "Brush out loose hair, more often fo...
+      7. [act] parse  proposals=2  rejected=0
+      8. [act] validate  accepted=["Brush fur", "Interactive play session"]  rejected=[]
+      9. [check] self_check  ok=true  issues=[]  scheduled_minutes=30
+     10. [check] score  proposals=[{"title": "Brush fur", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}, {"title": "Interactive play session", "confidence": 0.95, "detail": "model 90%, guid...
+     11. [check] result  accepted=[{"title": "Brush fur", "confidence": 0.95}, {"title": "Interactive play session", "confidence": 0.95}]  rejected=[]  ok=true
+
+3. Senior dog on medication: ✅ PASS
+   Scenario:  An 11-year-old dog whose special needs mention daily medication.
+   Expected:  Proposes a required medication task first and draws on the senior-care guide.
+   Checks:
+     ✅ the last model reply matched the schema  (2/2 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ proposes the medication task, marked required  (got [('Give prescribed medication', True)])
+     ✅ lists the required task first
+     ✅ brings in the senior-care guide
+   Proposals:
+     ╭─────┬───────────────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬───────────────────┬───────────────────────────────────╮
+     │ #   │ Task                          │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit               │ Sources                           │
+     ├─────┼───────────────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼───────────────────┼───────────────────────────────────┤
+     │ 1   │ 💊 Give prescribed medication │     5 │ 🔴 High ⭐ │ prefers 08:00 │ 🔁 daily  │ 🟢 88%       │ ✅ at 08:00       │ Giving prescribed medication      │
+     │     │                               │       │            │               │           │              │                   │ [medication-general]              │
+     │ 2   │ 🐕 Morning walk               │    30 │ 🔴 High    │ prefers 07:30 │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:30       │ Daily exercise for dogs [dog-     │
+     │     │                               │       │            │               │           │              │                   │ exercise]                         │
+     │ 3   │ 🐕 Evening walk               │    20 │ 🟡 Medium  │ prefers 18:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 18:00       │ Daily exercise for dogs [dog-     │
+     │     │                               │       │            │               │           │              │                   │ exercise]                         │
+     │ 4   │ 🎾 Fetch or tug play          │    15 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:10       │ Daily exercise for dogs [dog-     │
+     │     │                               │       │            │               │           │              │                   │ exercise]                         │
+     │ 5   │ 🐕 Gentle stroll              │    15 │ 🟡 Medium  │ prefers 10:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 10:00       │ Care for older pets [senior-care] │
+     │ 6   │ 🛁 Brush coat                 │    10 │ 🟢 Low     │ any time      │ 🔁 weekly │ 🟢 95%       │ ✅ at 08:05       │ Grooming and hygiene for dogs     │
+     │     │                               │       │            │               │           │              │                   │ [dog-grooming]                    │
+     │ 7   │ 🛁 Tooth brushing             │     5 │ 🟢 Low     │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:25       │ Grooming and hygiene for dogs     │
+     │     │                               │       │            │               │           │              │                   │ [dog-grooming]                    │
+     │ 8   │ 🍖 Breakfast feeding          │    10 │ 🔴 High    │ prefers 08:00 │ 🔁 daily  │ 🟢 87%       │ 🕒 moved to 07:00 │ Feeding routine for dogs [dog-    │
+     │     │                               │       │            │               │           │              │                   │ feeding]                          │
+     ╰─────┴───────────────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴───────────────────┴───────────────────────────────────╯
+   Left out:
+     - over the limit of 8 proposals
+   Step log:
+      1. [control] config  model="offline"  offline=true  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "dog", "age": 11, "special_needs_chars": 26}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="offline"  prompt_chars=527  response_chars=304
+           raw: {"needs": ["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "D...
+      4. [plan] plan_needs  needs=["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "Dog needs grooming and hygiene", "Dog needs giving medication on time"]  query_terms=["dog",...
+      5. [retrieve] retrieve  query_terms=["dog", "senior", "walk", "feeding", "enrichment", "grooming", "meds", "daily", "arthritis", "medication"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise for dogs", "score":...
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="offline"  prompt_chars=4954  response_chars=3596
+           raw: {"proposals": [{"category": "meds", "confidence": 0.75, "description": "Give the dose exactly as prescribed by...
+      7. [act] parse  proposals=9  rejected=0
+      8. [act] validate  accepted=["Give prescribed medication", "Morning walk", "Evening walk", "Fetch or tug play", "Gentle stroll", "Brush coat", "Tooth brushing", "Breakfast feeding"]  rejected=[{"index": -1, "reason": "o...
+      9. [check] self_check  ok=true  issues=[["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]  scheduled_minutes=110
+     10. [check] score  proposals=[{"title": "Give prescribed medication", "confidence": 0.88, "detail": "model 75%, guide support 100%, schedule fit 100%"}, {"title": "Morning walk", "confidence": 0.95, "detail": "model 90%,...
+     11. [check] result  accepted=[{"title": "Give prescribed medication", "confidence": 0.88}, {"title": "Morning walk", "confidence": 0.95}, {"title": "Evening walk", "confidence": 0.95}, {"title": "Fetch or tug play", "con...
+
+4. Bare-minimum pet (edge: nothing to go on) [edge case]: ✅ PASS
+   Scenario:  A pet of species 'other' with no breed, age, needs or tasks.
+   Expected:  Does not crash and does not borrow dog or cat guides; may propose nothing.
+   Checks:
+     ✅ the last model reply matched the schema  (2/2 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ finishes without error
+     ✅ does not borrow the dog or cat guides  (cited [])
+     ✅ proposes nothing it cannot ground  (0 proposal(s))
+   Step log:
+      1. [control] config  model="offline"  offline=true  reason="evaluation default"  species="other"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "other", "age": null, "special_needs_chars": 0}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="offline"  prompt_chars=479  response_chars=186
+           raw: {"needs": ["Other needs a regular feeding routine", "Other needs play and enrichment", "Other needs grooming a...
+      4. [plan] plan_needs  needs=["Other needs a regular feeding routine", "Other needs play and enrichment", "Other needs grooming and hygiene"]  query_terms=["other", "feeding", "enrichment", "grooming"]  focus_categories=...
+      5. [retrieve] retrieve  query_terms=["other", "feeding", "enrichment", "grooming"]  chunks=[]
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="offline"  prompt_chars=598  response_chars=17
+           raw: {"proposals": []}
+      7. [act] parse  proposals=0  rejected=0
+      8. [act] validate  accepted=[]  rejected=[]
+      9. [check] score  proposals=[]
+     10. [check] result  accepted=[]  rejected=[]  ok=null
+
+5. Over-capacity day (edge) [edge case]: ✅ PASS
+   Scenario:  A dog with no tasks, on a day limited to 20 care minutes.
+   Expected:  The first check finds the day too full; repair trims the proposals to fit.
+   Checks:
+     ✅ the last model reply matched the schema  (3/3 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ the first schedule check found the day too full  (6 issue(s))
+     ✅ a repair round was run
+     ✅ the final proposals fit the 20-minute limit  (20 min)
+     ✅ the final schedule check has no warnings or errors
+   Proposals:
+     ╭─────┬──────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────╮
+     │ #   │ Task                 │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                        │
+     ├─────┼──────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────┤
+     │ 1   │ 🍖 Breakfast feeding │    10 │ 🔴 High    │ prefers 08:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 08:00 │ Feeding routine for dogs [dog- │
+     │     │                      │       │            │               │           │              │             │ feeding]                       │
+     │ 2   │ 🍖 Dinner feeding    │    10 │ 🔴 High    │ prefers 17:30 │ 🔁 daily  │ 🟢 95%       │ ✅ at 17:30 │ Feeding routine for dogs [dog- │
+     │     │                      │       │            │               │           │              │             │ feeding]                       │
+     ╰─────┴──────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────╯
+   Step log:
+      1. [control] config  model="offline"  offline=true  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 0}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="offline"  prompt_chars=481  response_chars=211
+           raw: {"needs": ["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "D...
+      4. [plan] plan_needs  needs=["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "Dog needs grooming and hygiene"]  query_terms=["dog", "walk", "feeding", "enrichment", "groo...
+      5. [retrieve] retrieve  query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise for dogs", "score": 6.0}, {"id": "dog-feeding", "title": "Feeding routine...
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="offline"  prompt_chars=3563  response_chars=2710
+           raw: {"proposals": [{"category": "walk", "confidence": 0.9, "description": "A brisk walk to burn energy and give th...
+      7. [act] parse  proposals=7  rejected=0
+      8. [act] validate  accepted=["Morning walk", "Evening walk", "Fetch or tug play", "Breakfast feeding", "Dinner feeding", "Brush coat", "Tooth brushing"]  rejected=[]
+      9. [check] self_check  ok=true  issues=[["warn", "NEWLY_SKIPPED", "Morning walk"], ["warn", "NEWLY_SKIPPED", "Fetch or tug play"], ["warn", "NEWLY_SKIPPED", "Evening walk"], ["warn", "NEWLY_SKIPPED", "Tooth brushing"], ...
+     10. [act] llm_call  duration_ms=0  call="repair"  attempt=1  model="offline"  prompt_chars=7632  response_chars=764
+           raw: {"proposals": [{"category": "feeding", "confidence": 0.9, "description": "Measured breakfast portion and fresh...
+     11. [act] validate  accepted=["Breakfast feeding", "Dinner feeding"]  rejected=[]
+     12. [act] repair  round=1  accepted=["Breakfast feeding", "Dinner feeding"]  ok=true  issues=[]
+     13. [check] score  proposals=[{"title": "Breakfast feeding", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}, {"title": "Dinner feeding", "confidence": 0.95, "detail": "model 90%, guide ...
+     14. [check] result  accepted=[{"title": "Breakfast feeding", "confidence": 0.95}, {"title": "Dinner feeding", "confidence": 0.95}]  rejected=[]  ok=true
+
+6. Impossible required task (edge) [edge case]: ✅ PASS
+   Scenario:  A model proposes a required medication task at 23:30, after the day ends at 20:00.
+   Expected:  The check flags it as an error, the repair round moves it inside the day, and it is scheduled.
+   Checks:
+     ✅ the last model reply matched the schema  (3/3 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ the schedule check flagged the 23:30 task as an error  ([['error', 'NEWLY_SKIPPED', 'Give prescribed medication']])
+     ✅ the problem was fed back for a repair
+     ✅ the final task is required and moved inside the day  ([('Give prescribed medication', '08:00')])
+     ✅ the final task is scheduled  (placed (datetime.time(8, 0), datetime.time(8, 5)))
+   Proposals:
+     ╭─────┬───────────────────────────────┬───────┬────────────┬─────────────┬───────────┬──────────────┬─────────────┬──────────────────────────────╮
+     │ #   │ Task                          │   Min │ Priority   │ When        │ Repeats   │ Confidence   │ Fit         │ Sources                      │
+     ├─────┼───────────────────────────────┼───────┼────────────┼─────────────┼───────────┼──────────────┼─────────────┼──────────────────────────────┤
+     │ 1   │ 💊 Give prescribed medication │     5 │ 🔴 High ⭐ │ fixed 08:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 08:00 │ Giving prescribed medication │
+     │     │                               │       │            │             │           │              │             │ [medication-general]         │
+     ╰─────┴───────────────────────────────┴───────┴────────────┴─────────────┴───────────┴──────────────┴─────────────┴──────────────────────────────╯
+   Step log:
+      1. [control] config  model="scripted"  offline=false  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 16}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="scripted"  prompt_chars=506  response_chars=79
+           raw: {"needs": ["Medication on time"], "query_terms": ["dog", "meds", "medication"]}
+      4. [plan] plan_needs  needs=["Medication on time"]  query_terms=["dog", "meds", "medication"]  focus_categories=["walk", "feeding", "enrichment", "grooming", "meds"]
+      5. [retrieve] retrieve  query_terms=["dog", "meds", "medication"]  chunks=[{"id": "medication-general", "title": "Giving prescribed medication", "score": 4.0}, {"id": "dog-exercise", "title": "Daily exercise for dogs", ...
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="scripted"  prompt_chars=4171  response_chars=352
+           raw: {"proposals": [{"title": "Give prescribed medication", "duration_minutes": 5, "priority": "high", "category": ...
+      7. [act] parse  proposals=1  rejected=0
+      8. [act] validate  accepted=["Give prescribed medication"]  rejected=[]
+      9. [check] self_check  ok=false  issues=[["error", "NEWLY_SKIPPED", "Give prescribed medication"], ["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]  scheduled_minutes=0
+     10. [act] llm_call  duration_ms=0  call="repair"  attempt=1  model="scripted"  prompt_chars=4928  response_chars=352
+           raw: {"proposals": [{"title": "Give prescribed medication", "duration_minutes": 5, "priority": "high", "category": ...
+     11. [act] validate  accepted=["Give prescribed medication"]  rejected=[]
+     12. [act] repair  round=1  accepted=["Give prescribed medication"]  ok=true  issues=[["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]
+     13. [check] score  proposals=[{"title": "Give prescribed medication", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}]
+     14. [check] result  accepted=[{"title": "Give prescribed medication", "confidence": 0.95}]  rejected=[]  ok=true
+
+7. Model answers badly twice: ✅ PASS
+   Scenario:  A model wraps its JSON in chatter, then in a code fence.
+   Expected:  Both replies are rejected as invalid, and the offline assistant answers instead.
+   Checks:
+     ✅ the last model reply matched the schema  (3/5 replies valid)
+     ✅ every proposal cites a guide that was retrieved
+     ✅ no other species' guide is cited
+     ✅ confidence scores are between 0 and 100%
+     ✅ no schedule error is left unresolved
+     ✅ the live owner was not changed
+     ✅ both bad replies were rejected, not used  (2 parse error(s))
+     ✅ fell back to the offline assistant
+     ✅ the replies counted as invalid were exactly the bad ones  (2 invalid)
+     ✅ the fallback still produced proposals
+   Proposals:
+     ╭─────┬──────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────╮
+     │ #   │ Task                 │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                        │
+     ├─────┼──────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────┤
+     │ 1   │ 🐕 Morning walk      │    30 │ 🔴 High    │ prefers 07:30 │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:30 │ Daily exercise for dogs [dog-  │
+     │     │                      │       │            │               │           │              │             │ exercise]                      │
+     │ 2   │ 🐕 Evening walk      │    20 │ 🟡 Medium  │ prefers 18:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 18:00 │ Daily exercise for dogs [dog-  │
+     │     │                      │       │            │               │           │              │             │ exercise]                      │
+     │ 3   │ 🎾 Fetch or tug play │    15 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:00 │ Daily exercise for dogs [dog-  │
+     │     │                      │       │            │               │           │              │             │ exercise]                      │
+     │ 4   │ 🍖 Breakfast feeding │    10 │ 🔴 High    │ prefers 08:00 │ 🔁 daily  │ 🟢 95%       │ ✅ at 08:00 │ Feeding routine for dogs [dog- │
+     │     │                      │       │            │               │           │              │             │ feeding]                       │
+     │ 5   │ 🍖 Dinner feeding    │    10 │ 🔴 High    │ prefers 17:30 │ 🔁 daily  │ 🟢 95%       │ ✅ at 17:30 │ Feeding routine for dogs [dog- │
+     │     │                      │       │            │               │           │              │             │ feeding]                       │
+     │ 6   │ 🛁 Brush coat        │    10 │ 🟢 Low     │ any time      │ 🔁 weekly │ 🟢 95%       │ ✅ at 07:20 │ Grooming and hygiene for dogs  │
+     │     │                      │       │            │               │           │              │             │ [dog-grooming]                 │
+     │ 7   │ 🛁 Tooth brushing    │     5 │ 🟢 Low     │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:15 │ Grooming and hygiene for dogs  │
+     │     │                      │       │            │               │           │              │             │ [dog-grooming]                 │
+     ╰─────┴──────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────╯
+   Step log:
+      1. [control] config  model="scripted"  offline=false  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+      2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 0}
+      3. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="scripted"  prompt_chars=482  response_chars=55
+           raw: {"needs": ["Exercise"], "query_terms": ["dog", "walk"]}
+      4. [plan] plan_needs  needs=["Exercise"]  query_terms=["dog", "walk"]  focus_categories=["walk", "feeding", "enrichment", "grooming"]
+      5. [retrieve] retrieve  query_terms=["dog", "walk"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise for dogs", "score": 4.0}, {"id": "dog-feeding", "title": "Feeding routine for dogs", "score": 2.0}, {"id": "do...
+      6. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="scripted"  prompt_chars=3445  response_chars=44
+           raw: Sure! Here are some tasks: {"proposals": []}
+      7. [act] parse_error  call="proposals"  attempt=1  error="reply is not valid JSON: Expecting value: line 1 column 1 (char 0)"
+      8. [act] llm_call  duration_ms=0  call="proposals"  attempt=2  model="scripted"  prompt_chars=3530  response_chars=14
+           raw: ```json {} ```
+      9. [act] parse_error  call="proposals"  attempt=2  error="reply is not valid JSON: Expecting value: line 1 column 1 (char 0)"
+     10. [control] fallback  reason="ProposalError: reply is not valid JSON: Expecting value: line 1 column 1 (char 0)"
+     11. [plan] llm_call  duration_ms=0  call="needs"  attempt=1  model="offline"  prompt_chars=482  response_chars=211
+           raw: {"needs": ["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "D...
+     12. [plan] plan_needs  needs=["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "Dog needs grooming and hygiene"]  query_terms=["dog", "walk", "feeding", "enrichment", "groo...
+     13. [retrieve] retrieve  query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise for dogs", "score": 6.0}, {"id": "dog-feeding", "title": "Feeding routine...
+     14. [act] llm_call  duration_ms=0  call="proposals"  attempt=1  model="offline"  prompt_chars=3564  response_chars=2710
+           raw: {"proposals": [{"category": "walk", "confidence": 0.9, "description": "A brisk walk to burn energy and give th...
+     15. [act] parse  proposals=7  rejected=0
+     16. [act] validate  accepted=["Morning walk", "Evening walk", "Fetch or tug play", "Breakfast feeding", "Dinner feeding", "Brush coat", "Tooth brushing"]  rejected=[]
+     17. [check] self_check  ok=true  issues=[]  scheduled_minutes=100
+     18. [check] score  proposals=[{"title": "Morning walk", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}, {"title": "Evening walk", "confidence": 0.95, "detail": "model 90%, guide support...
+     19. [check] result  accepted=[{"title": "Morning walk", "confidence": 0.95}, {"title": "Evening walk", "confidence": 0.95}, {"title": "Fetch or tug play", "confidence": 0.95}, {"title": "Breakfast feeding", "confidence":...
+
+8. Invalid pet data (guardrail): ✅ PASS
+   Scenario:  A pet whose age was set to 99 after it was created.
+   Expected:  Rejected up front with a clear message; no model is called.
+   Checks:
+     ✅ rejected before any model was called
+     ✅ named the problem  (pet age must be a whole number from 0 to 40, got 99)
+     ✅ logged the rejection
+   Stopped with InvalidPetData: pet age must be a whole number from 0 to 40, got 99
+   Step log:
+      1. [input] input_invalid  problems=["pet age must be a whole number from 0 to 40, got 99"]
+
+==============================================================================
+8/8 scenarios passed

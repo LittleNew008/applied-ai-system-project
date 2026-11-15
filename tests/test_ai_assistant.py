@@ -39,7 +39,8 @@ def trace_lines(path: Path) -> list[dict]:
 def proposal(**changes) -> dict:
     base = {"title": "Morning walk", "duration_minutes": 30, "priority": "high", "category": "walk",
             "timing": "preferred", "time": "07:30", "recurrence": "daily", "required": False,
-            "description": "A brisk walk.", "rationale": "Dogs need exercise.", "source_ids": ["dog-exercise"]}
+            "description": "A brisk walk.", "rationale": "Dogs need exercise.", "source_ids": ["dog-exercise"],
+            "confidence": 0.9}
     return {**base, **changes}
 
 
@@ -125,7 +126,7 @@ def test_the_shipped_knowledge_base_loads_and_every_template_is_valid():
     ids = {c.id for c in chunks}
     for chunk in chunks:
         for template in chunk.templates:
-            item = {**template, "rationale": "r", "source_ids": [chunk.id]}
+            item = {**template, "rationale": "r", "source_ids": [chunk.id], "confidence": 0.8}
             ai._check_item(item, ids)  # raises if a template breaks the proposal rules
 
 
@@ -310,8 +311,8 @@ def test_trace_file_records_each_step_in_order_with_no_secret(tmp_path):
     cfg = config(tmp_path, max_repairs=0)
     ai.propose_care_plan(owner, pet, TODAY, config=cfg)
     steps = [line["step"] for line in trace_lines(cfg.trace_path)]
-    assert steps == ["config", "llm_call", "plan_needs", "retrieve", "llm_call", "parse", "validate",
-                     "self_check", "result"]
+    assert steps == ["config", "input_check", "llm_call", "plan_needs", "retrieve", "llm_call", "parse", "validate",
+                     "self_check", "score", "result"]
     assert len({line["trace_id"] for line in trace_lines(cfg.trace_path)}) == 1
     llm = [line for line in trace_lines(cfg.trace_path) if line["step"] == "llm_call"]
     assert all({"prompt_sha256", "response_sha256", "duration_ms", "model"} <= set(line) for line in llm)

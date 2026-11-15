@@ -8,11 +8,16 @@ aligned (emoji that carry an invisible variation selector, such as the warning s
 `tests/test_display.py` checks this for every symbol below).
 """
 
+from collections.abc import Sequence
 from datetime import date
+from typing import TYPE_CHECKING
 
 from tabulate import tabulate
 
 from pawpal_system import Category, DailyPlan, PetTask, Pet, Priority, Recurrence, Task
+
+if TYPE_CHECKING:  # only for type hints: display.py itself does not depend on the assistant
+    from ai_assistant import CheckReport, KBChunk, ProposedTask
 
 CATEGORY_ICONS = {
     Category.WALK: "🐕",
@@ -171,3 +176,116 @@ def render_table(rows: list[dict], wrap_column: str = "Why", wrap_width: int = 4
     aligns = ["right" if header == "Min" else "left" for header in rows[0]]
     return tabulate(rows, headers="keys", tablefmt="rounded_outline", disable_numparse=True,
                     maxcolwidths=widths, colalign=aligns)
+
+
+# ---------------------------------------------------------------- Care Assistant proposals
+# These work on `ai_assistant.ProposedTask` objects (and the guides and schedule check that came with them).
+
+ASSISTANT_ICON = "✨"
+HIGH_CONFIDENCE, MEDIUM_CONFIDENCE = 0.75, 0.5  # at or above: green; at or above: amber; below: red
+
+
+def confidence_badge(confidence: float) -> str:
+    """A colour-coded confidence, e.g. "🟢 92%" (green from 75%, amber from 50%, red below)."""
+    icon = "🟢" if confidence >= HIGH_CONFIDENCE else "🟡" if confidence >= MEDIUM_CONFIDENCE else "🔴"
+    return f"{icon} {confidence:.0%}"
+
+
+def proposal_label(p: "ProposedTask") -> str:
+    """A proposal's title with its category emoji, e.g. "🐕 Morning walk"."""
+    return f"{category_icon(Category(p.category))} {p.title}"
+
+
+def proposal_when(p: "ProposedTask") -> str:
+    """When a proposal asks to happen, worded like `when_text`: "fixed 08:00", "prefers 07:30" or "any time"."""
+    if p.time and p.timing == "fixed":
+        return f"fixed {p.time}"
+    if p.time and p.timing == "preferred":
+        return f"prefers {p.time}"
+    return "any time"
+
+
+def proposal_repeats(p: "ProposedTask") -> str:
+    """How often a proposal repeats, worded like `repeats_text`."""
+    return "once" if p.recurrence == "once" else f"{REPEAT_ICON} {p.recurrence}"
+
+
+def proposal_priority(p: "ProposedTask") -> str:
+    """A proposal's colour-coded priority, with a star when it is marked required."""
+    return priority_badge(Priority.from_str(p.priority)) + (" ⭐" if p.required else "")
+
+
+def proposal_sources(p: "ProposedTask", retrieved: Sequence["KBChunk"]) -> str:
+    """The guides a proposal cites, as "Title [id]" joined with "; " (just the id if the guide is unknown)."""
+    titles = {chunk.id: chunk.title for chunk in retrieved}
+    return "; ".join(f"{titles[s]} [{s}]" if s in titles else f"[{s}]" for s in p.source_ids)
+
+
+def proposal_fit(p: "ProposedTask", report: "CheckReport | None") -> str:
+    """What the trial schedule did with a proposal: "✅ at 07:30", "🕒 moved to 08:00" or "⛔ would not fit"."""
+    if report is None or p.title not in report.placements:
+        return ""
+    placed = report.placements[p.title]
+    if placed is None:
+        return f"{STATUS_SKIPPED.split()[0]} would not fit"
+    start = f"{placed[0]:%H:%M}"
+    if p.time and p.timing in ("preferred", "fixed") and start != p.time:
+        return f"{SLOT_ICON} moved to {start}"
+    return f"{DONE_ICON} at {start}"
+
+
+def proposal_rows(proposals: Sequence["ProposedTask"], retrieved: Sequence["KBChunk"],
+                  report: "CheckReport | None" = None) -> list[dict]:
+    """One numbered row per proposal for a table: what, how long, priority, when, repeats, confidence, how it
+    fits the schedule, and the guides it cites."""
+    return [
+        {
+            "#": i,
+            "Task": proposal_label(p),
+            "Min": p.duration_minutes,
+            "Priority": proposal_priority(p),
+            "When": proposal_when(p),
+            "Repeats": proposal_repeats(p),
+            "Confidence": confidence_badge(p.confidence),
+            "Fit": proposal_fit(p, report),
+            "Sources": proposal_sources(p, retrieved),
+        }
+        for i, p in enumerate(proposals, 1)
+    ]
+
+
+def proposal_markdown(p: "ProposedTask") -> str:
+    """The headline of a proposal for Streamlit: bold title, a red REQUIRED tag, then the details."""
+    tag = " :red[**REQUIRED**]" if p.required else ""
+    return (f"{category_icon(Category(p.category))} **{p.title}**{tag}: {p.duration_minutes} min, "
+            f"{priority_badge(Priority.from_str(p.priority))}, {proposal_when(p)}, {proposal_repeats(p)}")
+
+
+def proposal_detail(p: "ProposedTask", retrieved: Sequence["KBChunk"], report: "CheckReport | None" = None) -> str:
+    """The small print under a proposal: confidence and why, the reason, the guides it cites, and the schedule fit."""
+    fit = proposal_fit(p, report)
+    slot = report.suggested_slots.get(p.title) if report else None
+    why = f" ({p.confidence_detail})" if p.confidence_detail else ""
+    parts = [f"Confidence {confidence_badge(p.confidence)}{why}.", f"{p.rationale}",
+             f"Sources: {proposal_sources(p, retrieved)}."]
+    if fit:
+        parts.append(f"Schedule check: {fit}.")
+    if slot:
+        parts.append(f"Next free slot: {slot[0]:%H:%M}-{slot[1]:%H:%M}.")
+    return " ".join(parts)
+
+
+def proposal_problems(p: "ProposedTask", report: "CheckReport | None") -> list[str]:
+    """The schedule warnings and errors about one proposal, each starting with a clash emoji."""
+    if report is None:
+        return []
+    return [f"{CLASH_ICON} {issue.message}" for issue in report.issues
+            if issue.task_title == p.title and issue.severity != "info"]
+
+
+def general_problems(report: "CheckReport | None") -> list[str]:
+    """The schedule warnings and errors that are not about one particular proposal."""
+    if report is None:
+        return []
+    return [f"{CLASH_ICON} {issue.message}" for issue in report.issues
+            if issue.task_title is None and issue.severity != "info"]

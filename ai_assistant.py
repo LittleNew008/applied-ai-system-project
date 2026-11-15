@@ -20,12 +20,14 @@ Environment variables: GEMINI_API_KEY, PAWPAL_GEMINI_MODEL, PAWPAL_OFFLINE, PAWP
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
 import logging
 import os
 import re
+import unicodedata
 import uuid
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -34,6 +36,8 @@ from datetime import date, datetime, time, timezone
 from pathlib import Path
 from time import perf_counter
 from typing import Literal, Protocol
+
+import jsonschema
 
 from pawpal_system import (
     Category,
@@ -53,6 +57,7 @@ DEFAULT_MODEL = "gemini-3.1-flash-lite"
 API_KEY_ENV = "GEMINI_API_KEY"
 MODEL_ENV = "PAWPAL_GEMINI_MODEL"
 OFFLINE_ENV = "PAWPAL_OFFLINE"
+OFFLINE_ALIAS_ENV = "OFFLINE_MODE"  # same switch, for convenience
 TRACE_ENV = "PAWPAL_TRACE_FILE"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
@@ -74,7 +79,8 @@ SYSTEM_PROMPT = (
     "Ground every proposed task in the provided reference notes and cite their ids in source_ids; "
     "do not cite ids that were not provided. Do not give medical dosing advice; for medication, "
     "say the owner should follow their vet's instructions. Keep tasks short and realistic, "
-    "and do not duplicate existing tasks."
+    "and do not duplicate existing tasks. Give each proposal a confidence from 0 to 1: how sure you are that it "
+    "suits this pet given the reference notes (lower it when the notes only loosely support the task)."
 )
 
 
@@ -97,9 +103,10 @@ class AssistantConfig:
         """Read the configuration from environment variables (never from a file in the repo)."""
         env = os.environ if env is None else env
         key = (env.get(API_KEY_ENV) or "").strip() or None
-        forced = (env.get(OFFLINE_ENV) or "").strip().lower() in _TRUE_VALUES
-        if forced:
-            reason = f"{OFFLINE_ENV} is set"
+        forced_by = next((name for name in (OFFLINE_ENV, OFFLINE_ALIAS_ENV)
+                          if (env.get(name) or "").strip().lower() in _TRUE_VALUES), None)
+        if forced_by:
+            reason = f"{forced_by} is set"
         elif key is None:
             reason = f"{API_KEY_ENV} is not set"
         elif not _sdk_available():
@@ -118,6 +125,46 @@ class AssistantConfig:
         )
 
 
+NO_DOTENV_ENV = "PAWPAL_NO_DOTENV"  # set to anything to skip reading the .env file (the tests do)
+DOTENV_KEYS = frozenset({API_KEY_ENV, MODEL_ENV, OFFLINE_ENV, OFFLINE_ALIAS_ENV, TRACE_ENV, "PAWPAL_DATA_FILE"})
+
+
+def load_env_file(path: Path | str | None = None, environ: dict | None = None) -> list[str]:
+    """Load PawPal+ settings from a `.env` file (default: next to this module) into the environment.
+
+    Lines look like `NAME=value` (an `export ` prefix, quotes and `# comments` are tolerated). Only the
+    settings named in `DOTENV_KEYS` are read; anything else in the file is ignored. A real environment
+    variable always wins, and an empty value is skipped, so a blank `GEMINI_API_KEY=` leaves the assistant
+    offline. A missing or unreadable file is not an error. Returns the names that were set, never the values.
+    """
+    environ = os.environ if environ is None else environ
+    if environ.get(NO_DOTENV_ENV):
+        return []
+    try:
+        text = Path(path or HERE / ".env").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):  # a missing, unreadable or non-text file must never stop the app
+        return []
+    loaded = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        name, sep, value = line.partition("=")
+        name, value = name.strip(), value.strip()
+        if not sep or name not in DOTENV_KEYS:
+            continue
+        if value[:1] in ("'", '"') and value.endswith(value[0]) and len(value) >= 2:
+            value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].strip()  # an inline comment, only for unquoted values
+        if value and not environ.get(name):
+            environ[name] = value
+            loaded.append(name)
+    return loaded
+
+
 def _sdk_available() -> bool:
     try:
         return importlib.util.find_spec("google.genai") is not None
@@ -127,10 +174,24 @@ def _sdk_available() -> bool:
 
 # ------------------------------------------------------------------ tracing
 
+_STAGE_OF_STEP = {
+    "config": "control", "input_check": "input", "input_invalid": "input", "plan_needs": "plan",
+    "retrieve": "retrieve", "kb_error": "retrieve", "parse": "act", "validate": "act", "repair": "act",
+    "repair_failed": "act", "self_check": "check", "score": "check", "result": "check", "fallback": "control",
+}
+_STAGE_OF_CALL = {"needs": "plan", "proposals": "act", "repair": "act"}
+RAW_LOG_LIMIT = 6000  # characters of a raw model reply kept in the trace
+
+
+def _clip(text: str, limit: int = RAW_LOG_LIMIT) -> str:
+    return text if len(text) <= limit else f"{text[:limit]}...[{len(text) - limit} more characters]"
+
+
 class Tracer:
     """Append-only JSONL trace of the agent's steps.
 
-    One line per step: {ts, trace_id, step, mode, duration_ms?, ...fields}. Writing never raises (a
+    One line per step: {ts, trace_id, step, stage, mode, duration_ms?, ...fields}, where stage is one of
+    input, plan, retrieve, act, check, control (the plan -> retrieve -> act -> check loop). Writing never raises (a
     read-only disk must not break the app), and any secret passed in `secrets` is scrubbed from every line.
     """
 
@@ -142,10 +203,13 @@ class Tracer:
         self._secrets = tuple(s for s in secrets if s)
 
     def step(self, name: str, **fields) -> None:
+        stage = (fields.pop("stage", None) or _STAGE_OF_CALL.get(fields.get("call", ""))
+                 or _STAGE_OF_STEP.get(name, "control"))
         record = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
             "trace_id": self.trace_id,
             "step": name,
+            "stage": stage,
             "mode": self.mode,
             **fields,
         }
@@ -416,6 +480,9 @@ class ProposedTask:
     description: str
     rationale: str
     source_ids: tuple[str, ...]
+    reported_confidence: float = 0.5  # what the model said (0..1), as parsed
+    confidence: float = 0.5  # the final score after grounding and schedule fit (see `score_proposals`)
+    confidence_detail: str = ""  # how `confidence` was reached, for the UI and the trace
 
 
 @dataclass(frozen=True)
@@ -437,6 +504,8 @@ _PROPOSAL_PROPERTIES = {
     "description": {"type": "string", "maxLength": 200},
     "rationale": {"type": "string", "minLength": 1, "maxLength": 300},
     "source_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1,
+                   "description": "0..1: how sure you are this task suits the pet, given the reference notes"},
 }
 PROPOSAL_SCHEMA: dict = {
     "type": "object",
@@ -480,8 +549,31 @@ def _parse_hhmm(text: str) -> time:
     return time(int(match.group(1)), int(match.group(2)))
 
 
+# The schema sent to Gemini is kept to the widely supported keywords. Locally we validate against the same schema
+# plus a few stricter rules, so the one schema stays the single source of truth for the shape of a proposal.
+_LOCAL_ITEM_SCHEMA = copy.deepcopy(PROPOSAL_SCHEMA["properties"]["proposals"]["items"])
+_LOCAL_ITEM_SCHEMA["properties"]["title"]["pattern"] = r"\S"  # not just spaces
+_LOCAL_ITEM_SCHEMA["properties"]["rationale"]["pattern"] = r"\S"
+_ITEM_VALIDATOR = jsonschema.Draft202012Validator(_LOCAL_ITEM_SCHEMA)
+_NEEDS_VALIDATOR = jsonschema.Draft202012Validator(NEEDS_SCHEMA)
+
+
+def _schema_problems(validator: jsonschema.Draft202012Validator, instance: object) -> list[str]:
+    """Every way `instance` breaks the schema, as short readable messages that start with the field name."""
+    problems = []
+    for err in sorted(validator.iter_errors(instance), key=lambda e: [str(part) for part in e.path]):
+        where = ".".join(str(part) for part in err.path)
+        problems.append(f"{where}: {err.message}" if where else err.message)
+    return problems
+
+
 def _check_item(item: object, retrieved_ids: set[str]) -> ProposedTask:
-    """Validate one proposal object; raises ValueError saying what is wrong."""
+    """Validate one proposal object against the schema, then the rules a schema cannot express.
+
+    Raises ValueError saying everything that is wrong. The schema covers keys, types, enums and ranges; the
+    extra checks are that `time` is a real HH:MM exactly when `timing` asks for one, and that every cited
+    source id is one of the reference notes the model was given.
+    """
     if not isinstance(item, dict):
         raise ValueError("proposal is not an object")
     expected = set(_PROPOSAL_PROPERTIES)
@@ -489,16 +581,9 @@ def _check_item(item: object, retrieved_ids: set[str]) -> ProposedTask:
         missing, extra = sorted(expected - set(item)), sorted(set(item) - expected)
         raise ValueError("; ".join(filter(None, [f"missing keys {missing}" if missing else "",
                                                   f"unexpected keys {extra}" if extra else ""])))
-    title, rationale, description = item["title"], item["rationale"], item["description"]
-    if not isinstance(title, str) or not title.strip() or len(title) > 80:
-        raise ValueError("title must be a non-empty string of at most 80 characters")
-    minutes = item["duration_minutes"]
-    if isinstance(minutes, bool) or not isinstance(minutes, int) or not MIN_MINUTES <= minutes <= MAX_MINUTES:
-        raise ValueError(f"duration_minutes must be an integer from {MIN_MINUTES} to {MAX_MINUTES}")
-    for key, allowed in (("priority", PRIORITIES), ("category", CATEGORIES), ("timing", TIMINGS),
-                         ("recurrence", RECURRENCES)):
-        if item[key] not in allowed:
-            raise ValueError(f"{key} must be one of {list(allowed)}, got {item[key]!r}")
+    problems = _schema_problems(_ITEM_VALIDATOR, item)
+    if problems:
+        raise ValueError("; ".join(problems))
     at = item["time"]
     if item["timing"] == "flexible":
         if at is not None:
@@ -507,21 +592,13 @@ def _check_item(item: object, retrieved_ids: set[str]) -> ProposedTask:
         if not isinstance(at, str):
             raise ValueError(f"time (HH:MM) is required when timing is {item['timing']}")
         _parse_hhmm(at)
-    if not isinstance(item["required"], bool):
-        raise ValueError("required must be true or false")
-    if not isinstance(description, str) or len(description) > 200:
-        raise ValueError("description must be a string of at most 200 characters")
-    if not isinstance(rationale, str) or not rationale.strip():
-        raise ValueError("rationale must be a non-empty string")
-    sources = item["source_ids"]
-    if not isinstance(sources, list) or not sources or not all(isinstance(s, str) for s in sources):
-        raise ValueError("source_ids must be a non-empty list of strings")
-    unknown = [s for s in sources if s not in retrieved_ids]
+    unknown = [s for s in item["source_ids"] if s not in retrieved_ids]
     if unknown:
         raise ValueError(f"source_ids {unknown} were not among the provided reference notes")
-    return ProposedTask(title.strip(), minutes, item["priority"], item["category"], item["timing"], at,
-                        item["recurrence"], item["required"], description.strip(), rationale.strip(),
-                        tuple(sources))
+    confidence = float(item["confidence"])
+    return ProposedTask(item["title"].strip(), item["duration_minutes"], item["priority"], item["category"],
+                        item["timing"], at, item["recurrence"], item["required"], item["description"].strip(),
+                        item["rationale"].strip(), tuple(item["source_ids"]), confidence, confidence)
 
 
 def parse_proposals(raw: str, retrieved_ids: set[str]) -> tuple[list[ProposedTask], list[Rejection]]:
@@ -595,6 +672,7 @@ class CheckReport:
     issues: tuple[CheckIssue, ...]
     plan: DailyPlan  # the plan on a copy of the owner with the candidates added
     suggested_slots: dict[str, tuple[time, time] | None]  # candidate title -> next free slot in today's plan
+    placements: dict[str, tuple[time, time] | None]  # candidate title -> where the trial plan put it (None: not scheduled)
 
 
 def _copy_owner(owner: Owner) -> Owner:
@@ -650,7 +728,126 @@ def self_check(owner: Owner, pet: Pet, candidates: Sequence[Task], on: date) -> 
 
     slots = {t.title: base_scheduler.next_available_slot(on, t.duration_minutes, not_before=t.requested_time)
              for t in candidates}
-    return CheckReport(not any(i.severity == "error" for i in issues), tuple(issues), after, slots)
+    placed = {item.task.id: (item.start, item.end) for item in after.scheduled_items}
+    placements = {t.title: placed.get(t.id) for t in candidates}
+    return CheckReport(not any(i.severity == "error" for i in issues), tuple(issues), after, slots, placements)
+
+
+# ------------------------------------------------------------------ confidence
+
+CONFIDENCE_WEIGHTS = {"model": 0.5, "grounding": 0.3, "fit": 0.2}
+LOW_CONFIDENCE = 0.5  # below this the UI leaves a proposal unticked
+
+
+def _supports(chunk: KBChunk, p: ProposedTask) -> bool:
+    """Whether a cited guide is really about this kind of task: it is tagged with the category or has a template for it."""
+    return p.category in chunk.tags or any(t["category"] == p.category for t in chunk.templates)
+
+
+def _schedule_fit(p: ProposedTask, report: CheckReport | None) -> float:
+    """1.0 if the trial plan put the task where it asked (or anywhere, if it asked for no time), 0.6 if it had to move
+    it, 0.0 if it could not be scheduled at all."""
+    if report is None:
+        return 1.0
+    placed = report.placements.get(p.title)
+    if placed is None:
+        return 0.0
+    if p.time and p.timing in ("preferred", "fixed") and placed[0] != _parse_hhmm(p.time):
+        return 0.6
+    return 1.0
+
+
+def score_proposals(proposals: Sequence[ProposedTask], retrieved: Sequence[KBChunk],
+                    report: CheckReport | None) -> list[ProposedTask]:
+    """Give each proposal its final `confidence` (0..1): the model's own figure (50%), whether a cited guide really
+    covers that kind of task (30%) and how well it fits the trial schedule (20%). The model's figure alone is not
+    trusted because models are poorly calibrated; the other two parts are checked by code. The breakdown is kept
+    in `confidence_detail`."""
+    by_id = {c.id: c for c in retrieved}
+    scored = []
+    for p in proposals:
+        grounding = 1.0 if any(_supports(by_id[s], p) for s in p.source_ids if s in by_id) else 0.4
+        fit = _schedule_fit(p, report)
+        w = CONFIDENCE_WEIGHTS
+        value = w["model"] * p.reported_confidence + w["grounding"] * grounding + w["fit"] * fit
+        detail = f"model {p.reported_confidence:.0%}, guide support {grounding:.0%}, schedule fit {fit:.0%}"
+        scored.append(replace(p, confidence=round(min(1.0, max(0.0, value)), 2), confidence_detail=detail))
+    return scored
+
+
+# ------------------------------------------------------------------ input validation
+
+MAX_NAME, MAX_SPECIES, MAX_BREED, MAX_SPECIAL_NEEDS = 60, 30, 60, 300
+MIN_AGE, MAX_AGE = 0, 40  # the same bounds as the app's age field
+_SPECIES_PATTERN = re.compile(r"[a-z][a-z '\-]*")
+
+
+class InvalidPetData(ValueError):
+    """The pet (or the request) failed input validation, so nothing was sent to a model.
+
+    `problems` lists every problem found, each one readable on its own."""
+
+    def __init__(self, problems: Sequence[str]):
+        self.problems = list(problems)
+        super().__init__("; ".join(self.problems))
+
+
+@dataclass(frozen=True)
+class PetInput:
+    """A pet's details after cleaning: this, not the raw `Pet`, is what a prompt is built from."""
+    name: str
+    species: str  # lower case
+    breed: str
+    age: int | None
+    special_needs: str
+
+
+def clean_text(text: object) -> str:
+    """Free text made safe to put in a prompt: control characters become spaces and runs of whitespace one space."""
+    if not isinstance(text, str):
+        return ""
+    return " ".join("".join(" " if unicodedata.category(ch).startswith("C") else ch for ch in text).split())
+
+
+def _sanitized(pet: Pet) -> PetInput:
+    age = pet.age if isinstance(pet.age, int) and not isinstance(pet.age, bool) else None
+    return PetInput(clean_text(pet.name), clean_text(pet.species).lower(), clean_text(pet.breed), age,
+                    clean_text(pet.special_needs))
+
+
+def validate_pet_input(owner: Owner, pet: Pet, on: date) -> PetInput:
+    """Check the request before anything is sent to a model; return the cleaned pet details.
+
+    Raises InvalidPetData listing every problem: the pet must belong to the owner; name, species, breed and
+    special needs must be present or within length limits; species must look like a species; age must be a whole
+    number from 0 to 40 (or unknown); and `on` must be a date. Control characters are not an error: they are
+    replaced with spaces (`clean_text`), which also keeps odd characters out of the prompt.
+    """
+    problems = []
+    if not isinstance(on, date):
+        problems.append("the plan date must be a date")
+    if all(p.id != pet.id for p in owner.pets):
+        problems.append(f"pet {clean_text(pet.name)!r} does not belong to this owner")
+    clean = _sanitized(pet)
+    if not clean.name:
+        problems.append("pet name must not be empty")
+    elif len(clean.name) > MAX_NAME:
+        problems.append(f"pet name is longer than {MAX_NAME} characters")
+    if not clean.species:
+        problems.append("pet species must not be empty")
+    elif len(clean.species) > MAX_SPECIES or not _SPECIES_PATTERN.fullmatch(clean.species):
+        problems.append(f"pet species {clean.species[:MAX_SPECIES]!r} is not a plain word of at most "
+                        f"{MAX_SPECIES} letters")
+    if len(clean.breed) > MAX_BREED:
+        problems.append(f"pet breed is longer than {MAX_BREED} characters")
+    if len(clean.special_needs) > MAX_SPECIAL_NEEDS:
+        problems.append(f"special needs are longer than {MAX_SPECIAL_NEEDS} characters")
+    if pet.age is not None and (isinstance(pet.age, bool) or not isinstance(pet.age, int)
+                                or not MIN_AGE <= pet.age <= MAX_AGE):
+        problems.append(f"pet age must be a whole number from {MIN_AGE} to {MAX_AGE}, got {pet.age!r}")
+    if problems:
+        raise InvalidPetData(problems)
+    return clean
 
 
 # ------------------------------------------------------------------ context (what the model sees)
@@ -685,16 +882,17 @@ def _open_task_dicts(pet: Pet) -> list[dict]:
 
 def _context(owner: Owner, pet: Pet, on: date) -> dict:
     existing = _open_task_dicts(pet)
-    species = pet.species.strip().lower()
+    clean = _sanitized(pet)
+    species = clean.species
     have = {t["category"] for t in existing}
     focus = [c for c in _FOCUS_CANDIDATES.get(species, _DEFAULT_FOCUS) if c not in have]
-    needs_meds = any(w in pet.special_needs.lower() for w in _MEDS_WORDS)
+    needs_meds = any(w in clean.special_needs.lower() for w in _MEDS_WORDS)
     if needs_meds and "meds" not in have:
         focus.append("meds")
     return {
         "date": on.isoformat(),
-        "pet": {"species": species, "breed": pet.breed, "age_years": pet.age, "age_stage": _age_stage(pet.age),
-                "special_needs": pet.special_needs},
+        "pet": {"species": species, "breed": clean.breed, "age_years": clean.age, "age_stage": _age_stage(clean.age),
+                "special_needs": clean.special_needs},
         "owner": {"day_start": f"{owner.day_start:%H:%M}", "day_end": f"{owner.day_end:%H:%M}",
                   "capacity_minutes": owner.capacity_minutes()},
         "existing_tasks": existing,
@@ -733,8 +931,10 @@ def _offline_proposals(ctx: dict) -> list[dict]:
             if template["category"] not in focus or template["title"].strip().casefold() in skip_titles:
                 continue
             skip_titles.add(template["title"].strip().casefold())
+            # A guide written for this species is trusted more than a general one.
+            confidence = 0.9 if ctx["pet"]["species"] in chunk["tags"] else 0.75
             proposals.append({**template, "rationale": f"{chunk['title']}: {template['description']}",
-                              "source_ids": [chunk["id"]]})
+                              "source_ids": [chunk["id"]], "confidence": confidence})
     proposals.sort(key=lambda p: not p["required"])  # stable: required ones first, so the proposal limit never cuts them
     return proposals
 
@@ -763,7 +963,7 @@ def _ask(client: LLMClient, tracer: Tracer, step: str, instruction: str, context
         with tracer.timed("llm_call", call=step, attempt=attempt, model=getattr(client, "model", "unknown"),
                           prompt_chars=len(prompt), prompt_sha256=_sha(prompt)) as extra:
             raw = client.generate_json(system=SYSTEM_PROMPT, prompt=prompt, schema=schema)
-            extra.update(response_chars=len(raw), response_sha256=_sha(raw))
+            extra.update(response_chars=len(raw), response_sha256=_sha(raw), raw_output=_clip(raw))
         try:
             return parser(raw)
         except ProposalError as err:
@@ -775,10 +975,9 @@ def _ask(client: LLMClient, tracer: Tracer, step: str, instruction: str, context
 
 def _parse_needs(raw: str) -> tuple[list[str], list[str]]:
     payload = _load_json(raw)
-    ok = (isinstance(payload, dict) and set(payload) == {"needs", "query_terms"}
-          and all(isinstance(payload[k], list) and all(isinstance(x, str) for x in payload[k]) for k in payload))
-    if not ok:
-        raise ProposalError('reply must be {"needs": [str], "query_terms": [str]}')
+    problems = _schema_problems(_NEEDS_VALIDATOR, payload)
+    if problems:
+        raise ProposalError("reply does not match the needs schema: " + "; ".join(problems))
     return payload["needs"], payload["query_terms"]
 
 
@@ -831,7 +1030,7 @@ def _run(owner: Owner, pet: Pet, on: date, config: AssistantConfig, client: LLMC
     hits = retrieve(terms, kb, RETRIEVE_K, species=pet.species)
     retrieved = tuple(chunk for chunk, _ in hits)
     retrieved_ids = {c.id for c in retrieved}
-    tracer.step("retrieve", query_terms=terms, chunks=[{"id": c.id, "score": s} for c, s in hits])
+    tracer.step("retrieve", query_terms=terms, chunks=[{"id": c.id, "title": c.title, "score": s} for c, s in hits])
 
     context = _context(owner, pet, on)
     context["needs"] = needs
@@ -851,31 +1050,43 @@ def _run(owner: Owner, pet: Pet, on: date, config: AssistantConfig, client: LLMC
         tracer.step("self_check", ok=report.ok, issues=[(i.severity, i.code, i.task_title) for i in report.issues],
                     scheduled_minutes=report.plan.total_minutes())
 
+    # Repair: malformed items (schema or rule violations) and schedule problems are fed back to the model, up to
+    # `max_repairs` times. The result of each round replaces the previous one, so a fixed item is no longer "rejected".
+    format_errors = list(parse_rejections)
     repairs = 0
-    while report is not None and _issue_dicts(report) and repairs < config.max_repairs:
+    while repairs < config.max_repairs and (format_errors or (report is not None and _issue_dicts(report))):
         repairs += 1
-        repair_context = {**context, "previous_proposals": [_proposal_dict(p) for p in accepted],
-                          "issues": _issue_dicts(report),
-                          "issue_titles": [i.task_title for i in report.issues if i.task_title]}
+        repair_context = {
+            **context,
+            "previous_proposals": [_proposal_dict(p) for p in accepted],
+            "issues": [] if report is None else _issue_dicts(report),
+            "issue_titles": [] if report is None else [i.task_title for i in report.issues if i.task_title],
+            "malformed_items": [{"reason": r.reason, "item": r.raw} for r in format_errors][:5],
+        }
         try:
-            repaired, repair_rejections = _ask(
+            repaired, format_errors = _ask(
                 client, tracer, "repair",
-                "The schedule check found problems with your proposals. Return a corrected, complete list of "
-                "proposals that avoids them.", repair_context, PROPOSAL_SCHEMA, parse)
+                "Some of your proposals were malformed (malformed_items) or the schedule check found problems "
+                "(issues). Return a corrected, complete list of proposals that avoids them.",
+                repair_context, PROPOSAL_SCHEMA, parse)
         except Exception as err:  # keep the earlier result rather than losing everything
             tracer.step("repair_failed", error=f"{type(err).__name__}: {err}")
             break
-        accepted, rejected_again, tasks = _validate(owner, pet, repaired, repair_rejections, config, on, tracer)
-        rejected += rejected_again
+        accepted, rejected, tasks = _validate(owner, pet, repaired, format_errors, config, on, tracer)
         report = self_check(owner, pet, tasks, on) if tasks else None
         tracer.step("repair", round=repairs, accepted=[p.title for p in accepted],
                     ok=None if report is None else report.ok,
                     issues=[] if report is None else [(i.severity, i.code, i.task_title) for i in report.issues])
 
+    accepted = score_proposals(accepted, retrieved, report)
+    tracer.step("score", proposals=[{"title": p.title, "confidence": p.confidence, "detail": p.confidence_detail}
+                                    for p in accepted])
+
     result = AssistantResult(mode=mode, fell_back=False, needs=tuple(needs), retrieved=retrieved,  # type: ignore[arg-type]
                              accepted=tuple(accepted), rejected=tuple(rejected), report=report,
                              trace_id=tracer.trace_id)
-    tracer.step("result", accepted=[p.title for p in accepted], rejected=len(rejected),
+    tracer.step("result", accepted=[{"title": p.title, "confidence": p.confidence} for p in accepted],
+                rejected=[{"index": r.index, "reason": r.reason} for r in rejected],
                 ok=None if report is None else report.ok)
     return result
 
@@ -884,18 +1095,26 @@ def _proposal_dict(p: ProposedTask) -> dict:
     return {"title": p.title, "duration_minutes": p.duration_minutes, "priority": p.priority,
             "category": p.category, "timing": p.timing, "time": p.time, "recurrence": p.recurrence,
             "required": p.required, "description": p.description, "rationale": p.rationale,
-            "source_ids": list(p.source_ids)}
+            "source_ids": list(p.source_ids), "confidence": p.reported_confidence}
 
 
 def propose_care_plan(owner: Owner, pet: Pet, on: date, *, config: AssistantConfig | None = None,
                       client: LLMClient | None = None, tracer: Tracer | None = None) -> AssistantResult:
     """Run the whole agent for `pet` and return proposals for the user to review.
 
-    Read-only on `owner`. A failure of the online model (network, quota, unusable reply even after one
+    Read-only on `owner`. The pet and date are validated first and `InvalidPetData` is raised (before any model is
+    called) if they are not acceptable. A failure of the online model (network, quota, unusable reply even after one
     retry) is logged and answered by the offline assistant instead (`fell_back=True`), so this does not raise
     for model problems.
     """
     config = config or AssistantConfig.from_env()
+    tracer = tracer or Tracer(config.trace_path, mode="offline" if config.offline else "gemini",
+                              secrets=(config.api_key or "",))
+    try:
+        clean = validate_pet_input(owner, pet, on)  # before any client is built or any model is called
+    except InvalidPetData as err:
+        tracer.step("input_invalid", problems=err.problems)
+        raise
     if client is None:
         try:
             client = make_client(config)
@@ -903,11 +1122,12 @@ def propose_care_plan(owner: Owner, pet: Pet, on: date, *, config: AssistantConf
             client = OfflineClient()
             config = replace(config, offline=True, offline_reason=f"could not start Gemini: {err}")
     mode = "offline" if isinstance(client, OfflineClient) else "gemini"
-    tracer = tracer or Tracer(config.trace_path, mode=mode, secrets=(config.api_key or "",))
     tracer.mode = mode
     tracer.step("config", model=getattr(client, "model", "unknown"), offline=mode == "offline",
-                reason=config.offline_reason, species=pet.species, max_proposals=config.max_proposals,
+                reason=config.offline_reason, species=clean.species, max_proposals=config.max_proposals,
                 max_repairs=config.max_repairs, date=on.isoformat())
+    tracer.step("input_check", ok=True, pet={"species": clean.species, "age": clean.age,
+                                             "special_needs_chars": len(clean.special_needs)})
 
     try:
         return _run(owner, pet, on, config, client, mode, tracer)
@@ -941,3 +1161,38 @@ def commit(owner: Owner, pet: Pet, result: AssistantResult, accept: Collection[s
         pet.add_task(task)
         created.append(task)
     return created
+
+
+# ------------------------------------------------------------------ reading the trace back
+
+def read_trace(path: Path | str, trace_id: str | None = None) -> list[dict]:
+    """The records of the JSONL trace (all of them, or one run's), in order. A missing file gives []."""
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    records = []
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if trace_id is None or record.get("trace_id") == trace_id:
+            records.append(record)
+    return records
+
+
+def format_trace(records: Sequence[dict], width: int = 160) -> str:
+    """A readable log of a run: one line per step, `[stage] step  key=value ...`; a raw model reply goes on its
+    own indented line. Long values are shortened to `width` characters."""
+    skip = {"ts", "trace_id", "step", "stage", "mode", "prompt_sha256", "response_sha256", "raw_output"}
+    lines = []
+    for i, record in enumerate(records, 1):
+        details = "  ".join(f"{k}={json.dumps(v, ensure_ascii=False, default=str)}"
+                            for k, v in record.items() if k not in skip)
+        line = f"{i:>2}. [{record.get('stage', '?')}] {record.get('step', '?')}  {details}".rstrip()
+        lines.append(line if len(line) <= width * 2 else line[:width * 2] + "...")
+        if record.get("raw_output"):
+            raw = " ".join(str(record["raw_output"]).split())
+            lines.append(f"      raw: {raw if len(raw) <= width else raw[:width] + '...'}")
+    return "\n".join(lines)

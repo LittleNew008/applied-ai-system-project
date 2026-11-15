@@ -26,7 +26,7 @@ A busy pet owner needs help staying consistent with pet care. They want an assis
 - **Remembers your data.** Pets and tasks are saved to `data.json` automatically (`Owner.save_to_json`) and loaded the next time (`Owner.load_from_json`). A damaged file is set aside, never overwritten. See [Data persistence](#-data-persistence).
 - **Easy to read.** An emoji for each kind of pet and task (🐶 🐱, 💊 🐕 🍖 🎾 🛁), color-coded priority (🔴 🟡 🟢) and status (✅ scheduled, ⛔ not scheduled, 🚨 required task left out), a red REQUIRED tag, green / blue / red task status (done / starts later / overdue), and aligned tables in both the app and the terminal.
 - **Safe input.** Blank names, non-positive durations, impossible day windows and duplicate pets are rejected with a clear message.
-- **Tested.** 401 automated tests cover the backend, the app, the formatting, the demo, the class diagram and the Care Assistant.
+- **Tested.** 539 automated tests cover the backend, the app, the formatting, the demo, the class diagram and the Care Assistant.
 
 ## 🏆 Extra-credit challenges
 
@@ -45,8 +45,10 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-streamlit run app.py     # the app (your pets and tasks are saved to data.json)
+python -m streamlit run app.py   # the app (your pets and tasks are saved to data.json)
 python main.py           # the command-line demo (saves nothing to your data.json)
+python main.py assist    # the Care Assistant on the command line: suggestions, choose, add (see below)
+python evaluate.py       # evaluate the Care Assistant on predefined scenarios (see below)
 python -m pytest         # the tests (they use temporary files, never your data.json)
 ```
 
@@ -54,7 +56,7 @@ New to the app? Open it and press **Load sample data** to get two pets and eight
 
 ## 🧩 Implementation Summary
 
-**What was built.** The backend is in [pawpal_system.py](pawpal_system.py): a small domain model plus a `Scheduler` that turns it into a one-day plan with a reason for every decision. [main.py](main.py) is a command-line demo, [app.py](app.py) is the Streamlit UI, connected to those classes. The pytest suite (401 tests) is in [tests/](tests/): the backend ([test_pawpal.py](tests/test_pawpal.py)), the real app run headlessly ([test_app.py](tests/test_app.py)), the display formatting ([test_display.py](tests/test_display.py)), the command-line demo ([test_main.py](tests/test_main.py)) and the diagram ([test_uml.py](tests/test_uml.py)). [display.py](display.py) turns results into emoji, color-coded badges and tables for both the app and the terminal. The final class diagram is [diagrams/uml_final.mmd](diagrams/uml_final.mmd) (Mermaid source; `tests/test_uml.py` checks it against the code). The picture below is a rendering of it.
+**What was built.** The backend is in [pawpal_system.py](pawpal_system.py): a small domain model plus a `Scheduler` that turns it into a one-day plan with a reason for every decision. [main.py](main.py) is a command-line demo, [app.py](app.py) is the Streamlit UI, connected to those classes. The pytest suite (539 tests) is in [tests/](tests/): the backend ([test_pawpal.py](tests/test_pawpal.py)), the real app run headlessly ([test_app.py](tests/test_app.py)), the display formatting ([test_display.py](tests/test_display.py)), the command-line demo ([test_main.py](tests/test_main.py)) and the diagram ([test_uml.py](tests/test_uml.py)). [display.py](display.py) turns results into emoji, color-coded badges and tables for both the app and the terminal. The final class diagram is [diagrams/uml_final.mmd](diagrams/uml_final.mmd) (Mermaid source; `tests/test_uml.py` checks it against the code). The picture below is a rendering of it.
 
 ![PawPal+ class diagram](diagrams/uml_final.png)
 
@@ -206,7 +208,7 @@ python -m pytest
 
 `pytest.ini` points pytest at `tests/` and the project root, so no other setup is needed. To run one file, name it (for example `python -m pytest tests/test_pawpal.py`); add `-v` to list each test.
 
-**What the tests cover.** There are 401 tests: 208 on the backend (`tests/test_pawpal.py`), 50 that drive the real Streamlit app headlessly (`tests/test_app.py`), 37 on the emoji, badges and tables (`tests/test_display.py`), 15 that check the UML diagram against the code (`tests/test_uml.py`), 4 that run the command-line demo (`tests/test_main.py`) and 87 on the Care Assistant (`tests/test_ai_assistant.py`, `tests/test_retriever.py`, `tests/test_app_assistant.py`; all offline). They check these core behaviors, each with happy paths and edge cases:
+**What the tests cover.** There are 539 tests: 208 on the backend (`tests/test_pawpal.py`), 50 that drive the real Streamlit app headlessly (`tests/test_app.py`), 37 on the emoji, badges and tables (`tests/test_display.py`), 15 that check the UML diagram against the code (`tests/test_uml.py`), 4 that run the command-line demo (`tests/test_main.py`) and 225 on the Care Assistant (`tests/test_ai_assistant.py`, `tests/test_retriever.py`, `tests/test_guardrails.py`, `tests/test_app_assistant.py`, `tests/test_main_assistant.py`, `tests/test_display_assistant.py`, `tests/test_evaluate.py`, `tests/test_dotenv.py`; all offline). They check these core behaviors, each with happy paths and edge cases:
 
 | Core behavior | Happy path | Edge cases |
 |---|---|---|
@@ -236,7 +238,7 @@ rootdir: /home/dev/ai110-module2show-pawpal-starter
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.15.1
-collected 401 items
+collected 539 items
 
 tests/test_app.py ..................................................     [ 15%]
 tests/test_display.py .....................................              [ 27%]
@@ -247,12 +249,12 @@ tests/test_pawpal.py ................................................... [ 45%]
 .............                                                            [ 95%]
 tests/test_uml.py ...............                                        [100%]
 
-============================= 401 passed in 8.0s ==============================
+============================= 539 passed in 8.3s ==============================
 ```
 
 **Confidence level: ★★★★☆ (4 out of 5).**
 
-Why it is high: every one of the 401 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
+Why it is high: every one of the 539 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
 
 Why it is not 5: the tests were written by the same AI assistant that wrote the code, so they can share its blind spots (injecting deliberate bugs reduces this but does not remove it); the UI is tested headlessly and in screenshots, and has had only a brief hand check in a browser; the data file is single-user and local; the planner is greedy by design, so tests prove its plans are valid, not that they are the best possible; and overnight days, time zones and seconds in times are not supported (seconds are truncated, and a test documents that). Code coverage has not been measured.
 
@@ -444,28 +446,85 @@ Not scheduled:
 
 The "Care Assistant" panel in the Tasks section suggests care tasks for the selected pet. It never changes the schedule by itself: it proposes, you tick what you want, and only then are tasks added through the normal `Pet.add_task`. The scheduler's rules are unchanged.
 
-**What it does** ([ai_assistant.py](ai_assistant.py)), logging every step to a trace file:
+**What it does** ([ai_assistant.py](ai_assistant.py)): a plan → retrieve → act → check loop, with guardrails at each step and a log of every step.
 
-1. **Plan needs:** works out which care categories the pet has no open task for (plus medication if its special needs mention it).
+0. **Input check:** before anything is sent, the pet and date are validated (`validate_pet_input`): the pet must belong to the owner, name, species, breed and special needs must be present and within length limits, species must be a plain word, age a whole number from 0 to 40 (or unknown). Bad data raises `InvalidPetData` listing every problem, and no model is called. Free text is cleaned (control characters and runs of whitespace become single spaces) before it goes into a prompt.
+1. **Plan:** works out which care categories the pet has no open task for (plus medication if its special needs mention it).
 2. **Retrieve (RAG):** looks up matching care guides in [knowledge/](knowledge/) with `search_knowledge(pet, query, kb, k)`: the pet (species, life stage, special needs) and the question become terms, scored by tag and keyword match (deterministic, no embeddings; another species's guides are never returned).
-3. **Propose:** asks the model for tasks as strict JSON that must cite the guides it used.
-4. **Validate:** the reply must be exactly the expected JSON (no prose or code fences); each proposal is checked field by field, de-duplicated against the pet's open tasks, and built with the normal `Task` constructor. A bad proposal is rejected on its own; an unusable reply is retried once and then answered offline.
-5. **Self-check:** the proposals are tried on a *copy* of the owner and compared with the plan as it stands: tasks that would not be scheduled, existing tasks pushed out, new clashes, the daily limit. Problems are fed back to the model for one repair round, and shown in the app.
+3. **Act:** asks the model for tasks as strict JSON that must cite the guides it used and give a confidence from 0 to 1. The reply is validated against the JSON schema (`PROPOSAL_SCHEMA`, the same schema sent to Gemini, checked locally with `jsonschema`) plus rules a schema cannot state (a real `HH:MM` time exactly when the timing needs one, cited guides must be ones that were provided). A reply that is not exactly the expected JSON is retried once with the error; a single bad proposal is rejected on its own; the proposals are de-duplicated and built with the normal `Task` constructor.
+4. **Check:** the proposals are tried on a *copy* of the owner and compared with the plan as it stands: tasks that would not be scheduled, existing tasks pushed out, new clashes, the daily limit. Malformed items and schedule problems are fed back to the model for one repair round (the corrected reply replaces the earlier one), and anything still wrong is shown in the app.
 
-**Setup.** The key is read from an environment variable and is never stored in the repo (`.env` and `ai_trace.jsonl` are in `.gitignore`):
+**Confidence.** Each proposal gets a final score from 0 to 100%: the model's own figure (50%), whether a cited guide really covers that kind of task (30%, checked by code), and how well it fits the trial schedule (20%: placed where it asked, moved, or not placeable). The model's figure alone is not trusted because models are poorly calibrated. The app shows the score and its breakdown, and leaves low-confidence (below 50%) and required suggestions unticked.
+
+**Log.** Every step is appended to `ai_trace.jsonl` as one JSON line with its stage (input, plan, retrieve, act, check): the plan, the retrieved guides (id, title, score), each model call with its raw reply (shortened to 6000 characters, plus size and hash, never the prompt or key), parse errors, validation results with reasons, the self-check, repairs, confidence scores and the final result. The app shows a readable version of the current run under "Agent log for this run" (`read_trace`, `format_trace`).
+
+**In the app** the panel shows, for each suggestion: the task (with the same emoji, priority colours and wording as the task list), its confidence badge and breakdown, the reason, the care guides it cites (title and id), what the trial schedule did with it (at its time, moved, or would not fit) and any warnings. Tick the ones you want and press "Add selected".
+
+**On the command line** (same steps, same formatting from `display.py`):
+
+```bash
+python main.py assist                         # the demo owner's first pet; asks what to add, saves nothing
+python main.py assist --pet mochi             # another pet
+python main.py assist --accept 1,3            # no question: add suggestions 1 and 3 ("all", "none" or "" = the default ticks)
+python main.py assist --data data.json        # use your saved data; chosen tasks are saved back to that file
+python main.py assist --date 2026-03-02       # plan for another day
+```
+
+It prints the needs, the guides used, a table of suggestions (task, minutes, priority, when, repeats, confidence, schedule fit, sources), then asks "Add which?" (numbers like `1,3`, `all`, `none`, or Enter for the default: required and low-confidence suggestions are left out). The chosen tasks are added through `Pet.add_task` and today's schedule is printed again.
+
+**Setup.** Put your key in the `.env` file in the project folder (`GEMINI_API_KEY=...`). It is git-ignored along with `ai_trace.jsonl`, so it is never committed, and the app, `python main.py assist` and `python evaluate.py --online` all read it. A real environment variable overrides the file, and a blank value leaves the assistant offline. Run `pip install -r requirements.txt` once so the `google-genai` package is there. Without a key or the package the assistant simply runs offline.
+
+**If it says the Care Assistant is offline because `google-genai` is not installed, or the app says a package is missing,** Streamlit was started with a different Python than the project's `.venv` (a bare `streamlit` command can pick up another installation). Start it from the project folder with `source .venv/bin/activate` and `python -m streamlit run app.py`; the repo's VS Code settings already point the editor and its terminals at `.venv`. The same settings as environment variables:
 
 ```bash
 export GEMINI_API_KEY=...              # your key; without it the assistant runs offline
 export PAWPAL_GEMINI_MODEL=...         # optional; default gemini-3.1-flash-lite (a low-cost Flash-Lite model)
-export PAWPAL_OFFLINE=1                # optional: force the offline assistant
+export PAWPAL_OFFLINE=1                # optional: force the offline assistant (OFFLINE_MODE=1 does the same)
 export PAWPAL_TRACE_FILE=ai_trace.jsonl   # optional: where the step trace goes
 ```
 
-**Offline mode** is deterministic and needs no network: it answers from the same knowledge-base notes with rule-based logic. It is used when `PAWPAL_OFFLINE` is set, when there is no key or the `google-genai` package is missing, and as the fallback if a Gemini call fails. All tests run offline (`tests/conftest.py` forces it), so `python -m pytest` needs no key and no network.
+**Offline mode** is deterministic and needs no network: it returns canned proposals, the same every run, built from the knowledge-base guides' task templates, and they go through the same validation, self-check and scoring as a real model's. It is used when `PAWPAL_OFFLINE` (or `OFFLINE_MODE`) is set, when there is no key or the `google-genai` package is missing, and as the fallback if a Gemini call fails. All tests run offline (`tests/conftest.py` forces it), so `python -m pytest` needs no key and no network.
 
-**Privacy.** In online mode the pet's species, breed, age, special needs, its open task titles and the day window are sent to Google. The trace file records prompt and reply sizes and hashes, the retrieved guide ids, and validation results, never the key.
+**Privacy.** In online mode the pet's species, breed, age, special needs, its open task titles and the day window are sent to Google. The trace file records the raw model replies (which hold proposals, not the prompt), the retrieved guide ids and validation results, never the key or the prompt; it is local and gitignored.
 
 **Limits.** The guides are a small hand-written starting set, not veterinary advice; the assistant is told not to give dosing and the guides say to follow your vet. Retrieval is keyword-based, so unusual species get only the general guides.
+
+## 🧪 Evaluating the Care Assistant
+
+[evaluate.py](evaluate.py) runs the assistant on eight predefined scenarios, checks each outcome, prints a pass/fail table and writes a full text log. The log of the run below is [evaluation_log.txt](evaluation_log.txt): per scenario, its checks, the proposals with confidence and sources, and every step of the agent's log, including the raw model replies.
+
+```bash
+python evaluate.py              # run offline (deterministic), print the table, write evaluation_log.txt
+python evaluate.py --log run.txt   # write the log somewhere else
+python evaluate.py --online     # use Gemini where GEMINI_API_KEY is set (results can vary between runs)
+```
+
+The exit status is 0 when every scenario passes, so it can run in CI.
+
+```text
+╭─────┬───────────────────────────────────────────┬──────────┬─────────┬────────────┬──────────┬──────────────┬──────────┬─────────╮
+│ #   │ Scenario                                  │ Result   │ Props   │ Rejected   │ Schema   │ Confidence   │ Checks   │ Notes   │
+├─────┼───────────────────────────────────────────┼──────────┼─────────┼────────────┼──────────┼──────────────┼──────────┼─────────┤
+│ 1   │ Healthy adult dog, no tasks               │ ✅ PASS  │ 7       │ 0          │ ✅ 2/2   │ 95% / 95%    │ 9/9      │         │
+│ 2   │ Cat with a partial routine                │ ✅ PASS  │ 2       │ 0          │ ✅ 2/2   │ 95% / 95%    │ 9/9      │         │
+│ 3   │ Senior dog on medication                  │ ✅ PASS  │ 8       │ 1          │ ✅ 2/2   │ 87% / 93%    │ 9/9      │         │
+│ 4   │ Bare-minimum pet (edge: nothing to go on) │ ✅ PASS  │ 0       │ 0          │ ✅ 2/2   │ -            │ 9/9      │         │
+│ 5   │ Over-capacity day (edge)                  │ ✅ PASS  │ 2       │ 0          │ ✅ 3/3   │ 95% / 95%    │ 10/10    │         │
+│ 6   │ Impossible required task (edge)           │ ✅ PASS  │ 1       │ 0          │ ✅ 3/3   │ 95% / 95%    │ 10/10    │         │
+│ 7   │ Model answers badly twice                 │ ✅ PASS  │ 7       │ 0          │ ✅ 3/5   │ 95% / 95%    │ 10/10    │         │
+│ 8   │ Invalid pet data (guardrail)              │ ✅ PASS  │ -       │ -          │ -        │ -            │ 3/3      │         │
+╰─────┴───────────────────────────────────────────┴──────────┴─────────┴────────────┴──────────┴──────────────┴──────────┴─────────╯
+Schema: ✅/❌ for the last model reply, then valid/total replies (needs, proposals and repairs). Confidence: lowest / average of the accepted proposals.
+8/8 scenarios passed
+```
+
+**The scenarios.** Five are about what the assistant proposes: a healthy dog with no tasks, a cat with a partial routine, a senior dog on medication, and three edge cases: a bare-minimum pet of a species with no guide of its own (nothing to go on), a day limited to 20 care minutes (over capacity), and a required medication task proposed at 23:30, after the day ends (impossible). Two test the guardrails: a model that wraps its JSON in chatter twice, and a pet whose age is 99.
+
+**What is checked.** Every scenario that produces output gets the same checks: the last model reply matches the JSON schema, each proposal cites a guide that was actually retrieved, no other species' guide is cited, confidence is between 0 and 100%, no schedule error is left unresolved, and the live owner is unchanged. Each scenario adds its own, such as "the repair round moved the 23:30 task inside the day and it is scheduled".
+
+**Reading the table.** *Schema* shows whether the last model reply passed schema validation, then how many of all the replies in the run did (needs, proposals and repairs); `✅ 3/5` in scenario 7 means the two bad replies were correctly counted invalid and the fallback's three were valid. *Confidence* is the lowest and the average of the accepted proposals. A scenario can pass with no proposals (scenario 4): nothing it could ground was better than something invented.
+
+**What this does and does not show.** The default run is offline, so it tests the pipeline and its guardrails (validation, repair, grounding, scheduling checks, confidence scoring) deterministically; the offline "model" returns the guides' own task templates, so the high confidence scores there say little about how Gemini would do. The two scenarios that need a particular model behaviour use a scripted model even with `--online`.
 
 ## Project layout
 
@@ -474,9 +533,11 @@ app.py                Streamlit UI (no planning logic; it calls the classes belo
 main.py               command-line demo; also supplies the sample data for the app
 pawpal_system.py      Owner, Pet, Task, PetTask, Scheduler, DailyPlan and the other classes, plus saving and loading
 display.py            emoji, color-coded badges and table rows, shared by the app and the terminal demo
+evaluate.py           runs the Care Assistant on predefined scenarios and writes evaluation_log.txt
+evaluation_log.txt    the log of the last evaluation run (see above)
 ai_assistant.py       the Care Assistant: plans needs, retrieves from knowledge/, proposes strict-JSON tasks, self-checks
 knowledge/            the Care Assistant's local knowledge base (markdown care guides with a tag header)
-tests/                test_pawpal.py, test_app.py, test_display.py, test_main.py, test_uml.py, test_ai_assistant.py, test_retriever.py, test_app_assistant.py
+tests/                test_pawpal.py, test_app.py, test_display.py, test_main.py, test_uml.py, test_ai_assistant.py, test_retriever.py, test_guardrails.py, test_app_assistant.py, test_main_assistant.py, test_display_assistant.py, test_evaluate.py, test_dotenv.py
 diagrams/             uml_final.mmd (Mermaid source), uml_final.png (rendering), uml.mmd (identical older copy)
 screenshots/          the UI screenshots shown above
 data.json             your saved pets and tasks (created by the app; not in git)

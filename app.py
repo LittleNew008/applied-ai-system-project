@@ -5,17 +5,27 @@ calls those classes, and shows the result.
 """
 import json
 import os
+import sys
 from datetime import date, time
 from pathlib import Path
 
 import streamlit as st
 
-import ai_assistant
-import display
-from main import build_owner as build_sample_owner  # the same sample data the command-line demo uses
-from pawpal_system import Category, DailyPlan, Owner, Pet, Priority, Recurrence, Scheduler, Task
+try:
+    import ai_assistant
+    import display
+    from main import build_owner as build_sample_owner  # the same sample data the command-line demo uses
+    from pawpal_system import Category, DailyPlan, Owner, Pet, Priority, Recurrence, Scheduler, Task
+except ModuleNotFoundError as err:  # almost always: Streamlit was started with a Python that is not the project's .venv
+    st.set_page_config(page_title="PawPal+", page_icon="🐾")
+    st.error(f"PawPal+ cannot start: the Python package `{err.name}` is not installed for the Python running this app "
+             f"({sys.executable}).")
+    st.markdown("Start the app with the project's own environment, from the project folder:\n\n"
+                "```bash\nsource .venv/bin/activate\npip install -r requirements.txt\npython -m streamlit run app.py\n```")
+    st.stop()
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
+ai_assistant.load_env_file()  # the Gemini key and other settings from the git-ignored .env, if there is one
 
 SPECIES = ["dog", "cat", "other"]
 TILES_PER_ROW = 3
@@ -213,7 +223,7 @@ def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
     The assistant only proposes; nothing reaches the pet's task list until "Add selected" is pressed.
     """
     config = ai_assistant.AssistantConfig.from_env()
-    with st.expander("✨ Care Assistant: suggest tasks"):
+    with st.expander(f"{display.ASSISTANT_ICON} Care Assistant: suggest tasks"):
         if config.offline:
             st.caption(f"Offline mode ({config.offline_reason}): suggestions come from the built-in care guides, "
                        "with no network use.")
@@ -221,8 +231,13 @@ def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
             st.caption(f"Using Gemini ({config.model}). Pet details and task titles are sent to Google when you "
                        "ask for suggestions.")
         if st.button(f"Suggest tasks for {pet.name}", key="ai_suggest"):
-            with st.spinner("Planning..."):
-                st.session_state.ai_result = (pet.id, ai_assistant.propose_care_plan(owner, pet, today, config=config))
+            try:
+                with st.spinner("Planning..."):
+                    st.session_state.ai_result = (pet.id, ai_assistant.propose_care_plan(owner, pet, today, config=config))
+            except ai_assistant.InvalidPetData as err:
+                st.session_state.pop("ai_result", None)
+                st.error("The assistant was not asked, because this pet's details need fixing: "
+                         + "; ".join(err.problems))
 
         stored = st.session_state.get("ai_result")
         if not stored or stored[0] != pet.id:
@@ -236,27 +251,22 @@ def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
         if not result.accepted:
             st.info("Nothing new to suggest: the existing tasks already cover the usual care.")
         report = result.report
+        if result.retrieved:
+            st.caption("Care guides used: " + "; ".join(f"{c.title} [{c.id}]" for c in result.retrieved))
         picks = []
         for i, p in enumerate(result.accepted):
-            task_type = f"{display.category_icon(Category(p.category))} {display.priority_badge(Priority.from_str(p.priority))}"
-            when = f"{p.time} ({p.timing})" if p.time else "flexible"
-            slot = report.suggested_slots.get(p.title) if report else None
-            slot_text = f" Next free slot: {slot[0]:%H:%M}-{slot[1]:%H:%M}." if slot else ""
-            tag = " :red[**REQUIRED**]" if p.required else ""
-            problems = [f"{display.CLASH_ICON} {issue.message}" for issue in (report.issues if report else ())
-                        if issue.task_title == p.title and issue.severity != "info"]
             checked = st.checkbox(
-                f"**{p.title}**{tag}: {p.duration_minutes} min, {task_type}, {when}, {p.recurrence}",
-                value=not p.required, key=f"ai_pick_{result.trace_id}_{i}",
-                help="Required tasks start unticked: tick one only if it is right for this pet.")
-            st.caption(f"{p.rationale} (sources: {', '.join(p.source_ids)}).{slot_text}")
-            for problem in problems:
+                display.proposal_markdown(p),
+                value=not p.required and p.confidence >= ai_assistant.LOW_CONFIDENCE,
+                key=f"ai_pick_{result.trace_id}_{i}",
+                help="Required and low-confidence tasks start unticked: tick one only if it is right for this pet.")
+            st.caption(display.proposal_detail(p, result.retrieved, report))
+            for problem in display.proposal_problems(p, report):
                 st.warning(problem)
             if checked:
                 picks.append(p.title)
-        for issue in (report.issues if report else ()):
-            if issue.task_title is None and issue.severity != "info":
-                st.warning(issue.message)
+        for problem in display.general_problems(report):
+            st.warning(problem)
         if result.rejected:
             with st.expander(f"{len(result.rejected)} suggestion(s) left out"):
                 for r in result.rejected:
@@ -264,7 +274,10 @@ def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
         c_add, c_dismiss = st.columns(2)
         add = c_add.button("Add selected", key="ai_add", disabled=not picks, type="primary")
         c_dismiss.button("Dismiss", key="ai_dismiss", on_click=dismiss_suggestions)
-        st.caption(f"Trace of this run: {config.trace_path.name} (id {result.trace_id}).")
+        with st.expander("Agent log for this run (plan, retrieved guides, raw reply, validation)"):
+            st.code(ai_assistant.format_trace(ai_assistant.read_trace(config.trace_path, result.trace_id)),
+                    language=None)
+            st.caption(f"Full log: {config.trace_path.name} (run id {result.trace_id}).")
         if add:
             created = ai_assistant.commit(owner, pet, result, picks, today)
             st.session_state.pop("ai_result", None)
