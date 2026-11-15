@@ -1,0 +1,128 @@
+flowchart TD
+    %% PawPal+ Care Assistant: how data flows, where it is guarded, and where it is checked.
+    %% It matches the code as built. tests/test_architecture.py enforces that:
+    %%   - every "module.symbol" in a label resolves to a real function, class or method;
+    %%   - every "trace: name" is a step the agent really logs, and every logged step appears here;
+    %%   - the order of the agent steps matches the order of a real run;
+    %%   - the numbers (top-k, cap, repair rounds, score weights, scenario count) equal the code's values;
+    %%   - every tests/test_*.py file is named, and the Mermaid syntax passes a structural lint.
+    %% Solid arrows are the data and control flow. Dotted arrows are "uses", "logs to" or "is checked by".
+    %% Rounded boxes are automated tests, diamonds are guardrails and human review, cylinders are stores.
+    %% The scheduler (pawpal_system.py) is unchanged: the agent only trial-runs it on a copy of the owner.
+
+    subgraph IN["1. Input"]
+        PETS[("Owner, pets and tasks<br/>pawpal_system.Owner<br/>live copy in the app session, saved to data.json")]
+        ENV["Settings and API key<br/>.env (git-ignored) or the environment<br/>ai_assistant.load_env_file<br/>ai_assistant.AssistantConfig.from_env"]
+        REQ["Request: one pet and a date<br/>UI: app.care_assistant_panel<br/>CLI: main.assistant_flow"]
+    end
+
+    subgraph AGENT["2. Care Assistant agent: ai_assistant.propose_care_plan (read-only on the live owner)"]
+        VAL{"Input guardrail<br/>ai_assistant.validate_pet_input<br/>trace: input_check, input_invalid"}
+        CLIENT["Choose the model<br/>ai_assistant.make_client<br/>Gemini only if a key and the SDK are present<br/>trace: config"]
+        PLAN["Plan needs (LLM call: needs)<br/>ai_assistant.plan_needs<br/>trace: plan_needs"]
+        RAG["RAG retriever over the knowledge base<br/>ai_assistant.retrieve, top 5 guides<br/>ai_assistant.load_knowledge_base<br/>trace: retrieve, kb_error"]
+        LLM["LLM proposes tasks as JSON (LLM call: proposals)<br/>ai_assistant.GeminiClient or ai_assistant.OfflineClient<br/>trace: llm_call"]
+        SCHEMA{"Schema guardrail<br/>ai_assistant.parse_proposals<br/>jsonschema PROPOSAL_SCHEMA plus rules<br/>trace: parse, parse_error"}
+        BUILD["Validate and build tasks<br/>cap 8 proposals, ai_assistant.dedupe_against<br/>ai_assistant.to_task builds a real Task<br/>trace: validate"]
+        CHECK{"Self-check on a COPY of the owner<br/>ai_assistant.self_check<br/>trace: self_check"}
+        REPAIR["Repair round, at most 1<br/>LLM call: repair, with the problems fed back<br/>trace: repair, repair_failed"]
+        SCORE["Confidence score<br/>ai_assistant.score_proposals<br/>model 50%, guide support 30%, schedule fit 20%<br/>trace: score"]
+        RESULT["AssistantResult<br/>proposals, cited guides, confidence, issues<br/>trace: result"]
+        FALLBACK["Fallback: run the same steps again offline<br/>ai_assistant.OfflineClient is deterministic<br/>trace: fallback"]
+    end
+
+    subgraph KB["Knowledge base"]
+        GUIDES[("knowledge/*.md<br/>care guides with a tag header<br/>and task templates")]
+    end
+
+    subgraph CORE["pawpal_system.py (the scheduler, unchanged)"]
+        SCHED["Scheduler: generate_plan, find_conflicts, detect_conflicts, next_available_slot<br/>pawpal_system.Scheduler"]
+        ADD["Existing task-creation API<br/>pawpal_system.Pet.add_task"]
+    end
+
+    subgraph OUT["3. Output and human review"]
+        UI["Streamlit panel<br/>app.care_assistant_panel<br/>display.proposal_markdown, display.proposal_detail"]
+        CLI["Command line<br/>main.assistant_flow<br/>display.proposal_rows, display.render_table"]
+        HUMAN{"HUMAN REVIEW<br/>tick tasks (UI) or answer Add which (CLI)<br/>required and under 50% confidence start unticked"}
+        COMMIT["Add only the accepted titles<br/>ai_assistant.commit"]
+        LIVE[("Live owner<br/>app autosave, or main.py assist with --data, writes data.json")]
+        DAILY["Daily schedule shown<br/>pawpal_system.Scheduler.generate_plan on the live owner"]
+        ERR["InvalidPetData shown to the user<br/>no model was called"]
+    end
+
+    subgraph AUDIT["Audit trail"]
+        LOG[("ai_trace.jsonl, one line per step<br/>ai_assistant.Tracer<br/>ai_assistant.read_trace, ai_assistant.format_trace")]
+        REVIEW{"HUMAN REVIEW<br/>Agent log in the UI, run id in the CLI<br/>developer reads evaluation_log.txt"}
+    end
+
+    subgraph TESTS["Automated checks (pytest, always offline: tests/conftest.py removes the key and blocks the network)"]
+        T_IN(["tests/test_guardrails.py<br/>input validation"])
+        T_RAG(["tests/test_retriever.py<br/>retriever"])
+        T_LLM(["tests/test_ai_assistant.py<br/>tests/test_ai_assistant_errors.py<br/>stubbed Gemini, scripted and offline models"])
+        T_SCHEMA(["tests/test_guardrails.py<br/>schema, repair and confidence"])
+        T_CHECK(["tests/test_ai_assistant_errors.py<br/>self-check and error paths"])
+        T_CORE(["tests/test_pawpal.py<br/>tests/test_uml.py<br/>scheduler rules and class diagram"])
+        T_STORE(["tests/test_app.py<br/>autosave and reload"])
+        T_ENV(["tests/test_dotenv.py<br/>.env loading, git ignore"])
+        T_OUT(["tests/test_app_assistant.py<br/>tests/test_main_assistant.py<br/>tests/test_display_assistant.py<br/>tests/test_display.py<br/>tests/test_main.py"])
+        EVAL(["evaluate.py: 8 scenarios, pass or fail table<br/>writes evaluation_log.txt<br/>tests/test_evaluate.py"])
+        T_ARCH(["tests/test_architecture.py<br/>checks this diagram against the code"])
+    end
+
+    PETS --> REQ
+    REQ --> VAL
+    ENV --> CLIENT
+    VAL -->|"invalid"| ERR
+    VAL -->|"valid"| CLIENT
+    CLIENT --> PLAN
+    PLAN --> RAG
+    RAG --> LLM
+    LLM --> SCHEMA
+    SCHEMA -->|"reply unusable: retry once with the error"| LLM
+    LLM -->|"model error: network, quota, empty reply"| FALLBACK
+    SCHEMA -->|"reply still unusable on the retry"| FALLBACK
+    FALLBACK --> PLAN
+    SCHEMA -->|"valid items continue, bad items are rejected"| BUILD
+    BUILD --> CHECK
+    CHECK -->|"schedule problems or malformed items"| REPAIR
+    REPAIR --> SCHEMA
+    CHECK -->|"clean, or repairs used up"| SCORE
+    SCORE --> RESULT
+    RESULT --> UI
+    RESULT --> CLI
+    UI --> HUMAN
+    CLI --> HUMAN
+    HUMAN -->|"accepted"| COMMIT
+    COMMIT --> ADD
+    ADD --> LIVE
+    LIVE --> DAILY
+
+    GUIDES -.->|"read by"| RAG
+    CHECK -.->|"trial plan on the copy"| SCHED
+    DAILY -.->|"same scheduler"| SCHED
+    AGENT -.->|"logs every step"| LOG
+    LOG -.->|"shown to"| REVIEW
+
+    T_IN -.-> VAL
+    T_RAG -.-> RAG
+    T_LLM -.-> LLM
+    T_SCHEMA -.-> SCHEMA
+    T_CHECK -.-> CHECK
+    T_CORE -.-> SCHED
+    T_STORE -.-> LIVE
+    T_ENV -.-> ENV
+    T_OUT -.-> UI
+    T_OUT -.-> CLI
+    EVAL -.-> AGENT
+    T_ARCH -.-> AGENT
+
+    classDef guard fill:#fde8e8,stroke:#b42318,stroke-width:2px
+    classDef human fill:#fff4d6,stroke:#b7791f,stroke-width:3px
+    classDef test fill:#e8f1ff,stroke:#3b6ea5,stroke-dasharray: 4 3
+    classDef store fill:#eef7ee,stroke:#2f6f3e
+    classDef core fill:#f1f1f1,stroke:#555
+    class VAL,SCHEMA,CHECK guard
+    class HUMAN,REVIEW human
+    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH test
+    class PETS,GUIDES,LIVE,LOG store
+    class SCHED,ADD core
