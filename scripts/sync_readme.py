@@ -1,4 +1,4 @@
-"""Fills the generated blocks of README.md from the real files they quote, so the README cannot drift.
+"""Fills the generated blocks of README.md and model_card.md from the real files they quote, so they cannot drift.
 
 The README marks each generated block like this:
 
@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
+MODEL_CARD = ROOT / "model_card.md"
 EVIDENCE = ROOT / "evidence"
 
 # The command shown above each sample is the one a reader would type; the recorded file has the longer form
@@ -49,6 +50,7 @@ TEST_FILE_NOTES = {
     "test_dotenv.py": ".env loading and keeping it out of git",
     "test_architecture.py": "diagrams/architecture.mmd against the code",
     "test_readme.py": "this README against the files and runs it quotes",
+    "test_model_card.py": "model_card.md: its tables, numbers and every limitation it states, against the code and evidence",
 }
 
 
@@ -117,6 +119,40 @@ def tests_per_file() -> str:
     return intro + "\n".join(table)
 
 
+def evidence_tables(name: str) -> list[str]:
+    """The markdown tables (runs of lines starting with '|') in an evidence file, each as one string."""
+    tables, current = [], []
+    for line in (EVIDENCE / f"{name}.txt").read_text(encoding="utf-8").splitlines():
+        if line.startswith("|"):
+            current.append(line)
+        elif current:
+            tables.append("\n".join(current))
+            current = []
+    if current:
+        tables.append("\n".join(current))
+    return tables
+
+
+def card_test_total() -> str:
+    """The model card's one-line test and evaluation totals, from a live collection and the evaluation log."""
+    total = sum(collected_per_file().values())
+    log = (ROOT / "evaluation_log.txt").read_text(encoding="utf-8")
+    passed, scenarios = re.search(r"(\d+)/(\d+) scenarios passed", log).groups()
+    return (f"**{total} automated tests** (the original 314 unchanged), all offline, and **{passed} of {scenarios}** "
+            "evaluation scenarios passing offline ([evaluation_log.txt](evaluation_log.txt)).")
+
+
+# Blocks the model card can be compared with at any time (a live test collection and the evaluation log).
+CARD_LIVE_BLOCKS = ("test-total",)
+
+# The rest are recorded live (they need a Gemini key), so the model card shows exactly what the scripts wrote.
+CARD_BLOCKS = {
+    "test-total": card_test_total,
+    "rag-totals": lambda: evidence_tables("rag_comparison")[1],
+    "rag-per-pet": lambda: evidence_tables("rag_comparison")[0],
+    "injection-table": lambda: evidence_tables("injection_probe")[0],
+}
+
 BLOCKS = {
     "architecture": architecture,
     "sample-offline": lambda: sample("cli_assist_offline"),
@@ -135,14 +171,18 @@ LIVE_BLOCKS = ("architecture", "evaluate-table", "tests-per-file")
 MARKER = r"(<!-- BEGIN generated:{name} -->)\n.*?\n?(<!-- END generated:{name} -->)"
 
 
-def sync(text: str) -> str:
-    """`text` with every generated block replaced by its current content. A block missing from the README is an error."""
-    for name, make in BLOCKS.items():
+def sync(text: str, blocks: dict | None = None, label: str = "README.md") -> str:
+    """`text` with every generated block replaced by its current content. A block missing from the file is an error."""
+    for name, make in (BLOCKS if blocks is None else blocks).items():
         pattern = re.compile(MARKER.format(name=re.escape(name)), re.S)
         if not pattern.search(text):
-            raise SystemExit(f"README.md has no generated block named {name!r}")
+            raise SystemExit(f"{label} has no generated block named {name!r}")
         text = pattern.sub(lambda m, body=make(): f"{m.group(1)}\n{body}\n{m.group(2)}", text)
     return text
+
+
+# Written by their own scripts (scripts/rag_comparison.py, scripts/probe_injection.py) and only with a Gemini key.
+LIVE_ONLY_EVIDENCE = {"rag_comparison", "injection_probe"}
 
 
 def evidence_problems() -> list[str]:
@@ -153,6 +193,8 @@ def evidence_problems() -> list[str]:
     """
     problems = []
     for path in sorted(EVIDENCE.glob("*.txt")):
+        if path.stem in LIVE_ONLY_EVIDENCE:
+            continue
         text = path.read_text(encoding="utf-8")
         if path.stem != "environment" and not text.rstrip().endswith("[exit status 0]"):
             problems.append(f"{path.name}: the command did not finish with exit status 0")
@@ -168,17 +210,22 @@ def evidence_problems() -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     check = "--check" in (sys.argv[1:] if argv is None else argv)
-    current = README.read_text(encoding="utf-8")
-    updated = sync(current)
+    targets = [(README, BLOCKS)] + ([(MODEL_CARD, CARD_BLOCKS)] if MODEL_CARD.exists() else [])
     problems = evidence_problems()
     for problem in problems:
         print(f"EVIDENCE PROBLEM: {problem}")
-    if check:
-        print("README.md is up to date" if updated == current else "README.md is out of date: run python scripts/sync_readme.py")
-        return 0 if updated == current and not problems else 1
-    README.write_text(updated, encoding="utf-8")
-    print(f"README.md updated ({len(BLOCKS)} generated blocks)")
-    return 1 if problems else 0
+    stale = False
+    for path, blocks in targets:
+        current = path.read_text(encoding="utf-8")
+        updated = sync(current, blocks, path.name)
+        if check:
+            print(f"{path.name} is up to date" if updated == current
+                  else f"{path.name} is out of date: run python scripts/sync_readme.py")
+            stale = stale or updated != current
+        else:
+            path.write_text(updated, encoding="utf-8")
+            print(f"{path.name} updated ({len(blocks)} generated blocks)")
+    return 1 if problems or stale else 0
 
 
 if __name__ == "__main__":

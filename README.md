@@ -76,6 +76,7 @@ flowchart TD
         EVAL(["evaluate.py: 8 scenarios, pass or fail table<br/>writes evaluation_log.txt<br/>tests/test_evaluate.py"])
         T_ARCH(["tests/test_architecture.py<br/>checks this diagram against the code"])
         T_README(["tests/test_readme.py<br/>README sample runs, counts and tables"])
+        T_CARD(["tests/test_model_card.py<br/>limits and safeguards the model card states"])
     end
 
     PETS --> REQ
@@ -125,6 +126,7 @@ flowchart TD
     EVAL -.-> AGENT
     T_ARCH -.-> AGENT
     T_README -.-> CLI
+    T_CARD -.-> AGENT
 
     classDef guard fill:#fde8e8,stroke:#b42318,stroke-width:2px
     classDef human fill:#fff4d6,stroke:#b7791f,stroke-width:3px
@@ -133,7 +135,7 @@ flowchart TD
     classDef core fill:#f1f1f1,stroke:#555
     class VAL,SCHEMA,CHECK guard
     class HUMAN,REVIEW human
-    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README test
+    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README,T_CARD test
     class PETS,GUIDES,LIVE,LOG store
     class SCHED,ADD core
 ```
@@ -267,7 +269,7 @@ Not scheduled:
 🚧 Vet check-in call (Mochi): Skipped (medium priority): fixed time 12:00-12:15 clashes with 'Lunch feeding' (Biscuit) at 12:00-12:10
 ========================================================================
 8 scheduled (120 min), 1 skipped
-(Full step log of this run: ai_trace.jsonl, run id a6931ceffdef.)
+(Full step log of this run: ai_trace.jsonl, run id 92340c119ca9.)
 ```
 <!-- END generated:sample-offline -->
 
@@ -342,7 +344,7 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 ## 7. Testing summary
 
 <!-- BEGIN generated:tests-per-file -->
-**609 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
+**636 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
 
 | Test file | Tests | What it checks |
 |---|---:|---|
@@ -360,9 +362,10 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 | `tests/test_evaluate.py` | 18 | evaluate.py: scenarios, schema measurement, summary and log |
 | `tests/test_guardrails.py` | 47 | schema validation and repair, input validation, confidence scores, offline switch, step log |
 | `tests/test_main_assistant.py` | 37 | the Care Assistant on the command line |
+| `tests/test_model_card.py` | 27 | model_card.md: its tables, numbers and every limitation it states, against the code and evidence |
 | `tests/test_readme.py` | 23 | this README against the files and runs it quotes |
 | `tests/test_retriever.py` | 26 | the retriever: scoring, top-k, species and life-stage filters, pet and query search |
-| **Total** | **609** | |
+| **Total** | **636** | |
 <!-- END generated:tests-per-file -->
 
 - **Offline and keyless.** `tests/conftest.py` forces offline mode, removes any `GEMINI_API_KEY` and never reads the real `.env`. As an independent check, `scripts/block_network.py` refuses and counts every outbound connection: the full suite passes with a fake key set and **0 network attempts**.
@@ -406,7 +409,7 @@ Everything above can be regenerated. One command re-runs the commands this READM
 bash scripts/make_evidence.sh      # re-runs the commands, saves the outputs, and refreshes this README's generated blocks
 ```
 
-The key is never printed (the evidence files were checked for it). The Gemini transcript is recorded only when a key is configured.
+The key is never printed (the evidence files were checked for it). The Gemini transcript is recorded only when a key is configured, and the two live experiments in the last rows are run by their own scripts, because they make real calls.
 
 | File | Command | What it shows |
 |---|---|---|
@@ -419,6 +422,8 @@ The key is never printed (the evidence files were checked for it). The Gemini tr
 | [evidence/cli_assist_gemini.txt](evidence/cli_assist_gemini.txt) | sample 2 | A live Gemini run |
 | [evidence/cli_assist_invalid_pet.txt](evidence/cli_assist_invalid_pet.txt) | sample 3 | The input guardrail |
 | [evidence/environment.txt](evidence/environment.txt) | | Python and package versions |
+| [evidence/rag_comparison.txt](evidence/rag_comparison.txt) | `python scripts/rag_comparison.py` (live Gemini, about 30 calls) | No retrieval vs first RAG design vs current RAG, on four pets; used by the [model card](model_card.md) |
+| [evidence/injection_probe.txt](evidence/injection_probe.txt) | `python scripts/probe_injection.py` (live Gemini) | Three working prompt-injection probes and one stopped by the input check; used by the [model card](model_card.md) |
 
 The outputs, pasted from those files:
 
@@ -427,7 +432,7 @@ The outputs, pasted from those files:
 <!-- BEGIN generated:evidence-environment -->
 ```text
 $ environment
-# 2026-11-15 23:35:51 UTC | Python 3.13.15 | commit 066473b
+# 2026-11-15 23:56:42 UTC | Python 3.13.15 | commit eb564b1
 
 Linux 7.0.14-linuxkit aarch64
 google-genai              3.3.0
@@ -444,18 +449,18 @@ wcwidth                   0.9.4
 <!-- BEGIN generated:evidence-pytest-full -->
 ```text
 $ .venv/bin/python -m pytest -q
-# 2026-11-15 23:35:11 UTC | Python 3.13.15 | commit 066473b
+# 2026-11-15 23:56:06 UTC | Python 3.13.15 | commit eb564b1
 
 ........................................................................ [ 11%]
-........................................................................ [ 23%]
-........................................................................ [ 35%]
-........................................................................ [ 47%]
-........................................................................ [ 59%]
-........................................................................ [ 70%]
-........................................................................ [ 82%]
-........................................................................ [ 94%]
-.................................                                        [100%]
-609 passed in 12.54s
+........................................................................ [ 22%]
+........................................................................ [ 33%]
+........................................................................ [ 45%]
+........................................................................ [ 56%]
+........................................................................ [ 67%]
+........................................................................ [ 79%]
+........................................................................ [ 90%]
+............................................................             [100%]
+636 passed in 11.07s
 
 [exit status 0]
 ```
@@ -466,14 +471,14 @@ $ .venv/bin/python -m pytest -q
 <!-- BEGIN generated:evidence-pytest-original -->
 ```text
 $ .venv/bin/python -m pytest tests/test_pawpal.py tests/test_app.py tests/test_display.py tests/test_main.py tests/test_uml.py -q
-# 2026-11-15 23:35:24 UTC | Python 3.13.15 | commit 066473b
+# 2026-11-15 23:56:17 UTC | Python 3.13.15 | commit eb564b1
 
 ........................................................................ [ 22%]
 ........................................................................ [ 45%]
 ........................................................................ [ 68%]
 ........................................................................ [ 91%]
 ..........................                                               [100%]
-314 passed in 9.29s
+314 passed in 7.64s
 
 [exit status 0]
 ```
@@ -484,19 +489,19 @@ $ .venv/bin/python -m pytest tests/test_pawpal.py tests/test_app.py tests/test_d
 <!-- BEGIN generated:evidence-pytest-no-network -->
 ```text
 $ GEMINI_API_KEY=fake-key-not-real PYTHONPATH=scripts .venv/bin/python -m pytest -p block_network -q
-# 2026-11-15 23:35:34 UTC | Python 3.13.15 | commit 066473b
+# 2026-11-15 23:56:25 UTC | Python 3.13.15 | commit eb564b1
 
 ........................................................................ [ 11%]
-........................................................................ [ 23%]
-........................................................................ [ 35%]
-........................................................................ [ 47%]
-........................................................................ [ 59%]
-........................................................................ [ 70%]
-........................................................................ [ 82%]
-........................................................................ [ 94%]
-.................................                                        [100%]
+........................................................................ [ 22%]
+........................................................................ [ 33%]
+........................................................................ [ 45%]
+........................................................................ [ 56%]
+........................................................................ [ 67%]
+........................................................................ [ 79%]
+........................................................................ [ 90%]
+............................................................             [100%]
 NETWORK ATTEMPTS (non-loopback connect or DNS lookup): 0 []
-609 passed in 12.11s
+636 passed in 11.30s
 
 [exit status 0]
 ```
@@ -507,7 +512,7 @@ NETWORK ATTEMPTS (non-loopback connect or DNS lookup): 0 []
 <!-- BEGIN generated:evidence-pytest-per-file -->
 ```text
 $ .venv/bin/python -m pytest --collect-only -q | cut -d: -f1 | grep '^tests/' | sort | uniq -c
-# 2026-11-15 23:35:47 UTC | Python 3.13.15 | commit 066473b
+# 2026-11-15 23:56:37 UTC | Python 3.13.15 | commit eb564b1
 
      56 tests/test_ai_assistant.py
      33 tests/test_ai_assistant_errors.py
@@ -521,6 +526,7 @@ $ .venv/bin/python -m pytest --collect-only -q | cut -d: -f1 | grep '^tests/' | 
      47 tests/test_guardrails.py
       4 tests/test_main.py
      37 tests/test_main_assistant.py
+     27 tests/test_model_card.py
     208 tests/test_pawpal.py
      23 tests/test_readme.py
      26 tests/test_retriever.py
@@ -966,15 +972,19 @@ evaluation_log.txt    the log of the last evaluation run (see the testing summar
 ai_assistant.py       the Care Assistant: plans needs, retrieves from knowledge/, proposes strict-JSON tasks, self-checks
 knowledge/            the Care Assistant's local knowledge base (markdown care guides with a tag header)
 tests/                the pytest suite, one file per area (see the testing summary above)
-scripts/              make_evidence.sh (re-run the cited commands), sync_readme.py (fill this README's generated blocks),
-                      block_network.py (pytest plugin that proves a run makes no network calls)
-evidence/             recorded command outputs cited in this README (and bad_pet_data.json for sample 3)
+scripts/              make_evidence.sh (re-run the cited commands), sync_readme.py (fill the generated blocks of this README
+                      and of model_card.md), block_network.py (pytest plugin that proves a run makes no network calls),
+                      rag_comparison.py and probe_injection.py (live Gemini experiments; they need a key)
+evidence/             recorded command outputs cited in this README (and bad_pet_data.json for sample 3), plus the live
+                      rag_comparison.txt and injection_probe.txt cited by the model card
 diagrams/             uml_final.mmd (Mermaid source), uml_final.png (rendering), uml.mmd (identical older copy),
                       architecture.mmd (the Care Assistant's data flow, guardrails and where tests and people check it)
 screenshots/          the UI screenshots shown above
 data.json             your saved pets and tasks (created by the app; not in git)
 requirements.txt      streamlit, pytest, tabulate, wcwidth, google-genai, jsonschema
 .env                  your Gemini key and settings (git-ignored; never committed)
+model_card.md         the Care Assistant's limitations, misuse and prevention, reliability findings, AI collaboration,
+                      and a no-retrieval / first-RAG / current-RAG comparison table
 reflection.md         design choices, tradeoffs and AI collaboration
 ai_interactions.md    log of the AI-assisted work, including the Agent Workflow
 ```

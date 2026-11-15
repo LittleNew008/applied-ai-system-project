@@ -1,0 +1,28 @@
+$ python scripts/rag_comparison.py
+# 2026-11-15 23:48:44 UTC | 3.13.15 | commit eb564b1 | model gemini-3.1-flash-lite
+
+Per pet (one run each; Gemini, temperature 0). 'Model proposed' and 'Cited a real guide' count the model's
+first reply; 'Accepted' and 'Still rejected' are the final result after the validation and the one repair round.
+
+| Condition | Pet | Guides retrieved | Model proposed (first reply) | Cited a real guide | Accepted | Still rejected after repair | Mean confidence | Fell back |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| A. No retrieval (baseline) | Healthy adult dog, no tasks | 0 | 7 | 0 | 0 | 6 | - | no |
+| A. No retrieval (baseline) | Cat with a partial routine | 0 | 4 | 0 | 0 | 4 | - | no |
+| A. No retrieval (baseline) | Senior dog on medication | 0 | 5 | 0 | 0 | 5 | - | no |
+| A. No retrieval (baseline) | Pet of a species with no guide | 0 | 5 | 0 | 0 | 0 | - | no |
+| B. RAG, model's terms as written | Healthy adult dog, no tasks | 0 | 7 | 0 | 0 | 6 | - | no |
+| B. RAG, model's terms as written | Cat with a partial routine | 3 | 4 | 4 | 4 | 0 | 99% | no |
+| B. RAG, model's terms as written | Senior dog on medication | 0 | 5 | 0 | 0 | 5 | - | no |
+| B. RAG, model's terms as written | Pet of a species with no guide | 0 | 5 | 0 | 0 | 0 | - | no |
+| C. RAG, current (terms mapped + pet facts) | Healthy adult dog, no tasks | 4 | 7 | 7 | 7 | 0 | 99% | no |
+| C. RAG, current (terms mapped + pet facts) | Cat with a partial routine | 3 | 3 | 3 | 3 | 0 | 98% | no |
+| C. RAG, current (terms mapped + pet facts) | Senior dog on medication | 5 | 7 | 7 | 7 | 0 | 94% | no |
+| C. RAG, current (terms mapped + pet facts) | Pet of a species with no guide | 1 | 2 | 2 | 2 | 0 | 100% | no |
+
+Totals over the four pets
+
+| Condition | Guides retrieved | Model proposed | Well-formed | Cited a real guide | Accepted | Accepted titles identical to a guide's template task | Pets with at least one accepted | Model calls |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| A. No retrieval (baseline) | 0 | 21 | 21 | 0 (0%) | 0 | 0 (-) | 0 of 4 | 12 |
+| B. RAG, model's terms as written | 3 | 21 | 21 | 4 (19%) | 4 | 4 (100%) | 1 of 4 | 11 |
+| C. RAG, current (terms mapped + pet facts) | 13 | 19 | 19 | 19 (100%) | 19 | 19 (100%) | 4 of 4 | 8 |
