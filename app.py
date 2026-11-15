@@ -3,7 +3,6 @@
 All planning logic lives in pawpal_system.py. This file only collects input,
 calls those classes, and shows the result.
 """
-
 import json
 import os
 from datetime import date, time
