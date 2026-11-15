@@ -1,0 +1,34 @@
+$ env -u PAWPAL_OFFLINE -u OFFLINE_MODE .venv/bin/python main.py assist --pet mochi --accept none
+# 2026-11-15 23:35:48 UTC | Python 3.13.15 | commit 066473b
+
+✨ Care Assistant for 🐱 Mochi - Sunday, November 15, 2026
+Mode: Gemini (gemini-3.1-flash-lite); the pet's details and task titles were sent to Google.
+========================================================================
+Needs:
+  - Establish a consistent daily feeding schedule
+  - Monitor daily water intake
+  - Provide dental hygiene care
+  - Schedule regular litter box cleaning
+  - Monitor weight and body condition
+Care guides used:
+  - Grooming and litter care for cats [cat-grooming]
+  - Feeding routine for cats [cat-feeding]
+  - Play and enrichment for cats [cat-play]
+
+╭─────┬─────────────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────────╮
+│ #   │ Task                        │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                            │
+├─────┼─────────────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────────┤
+│ 1   │ 🍖 Morning feeding          │     5 │ 🔴 High    │ prefers 07:30 │ 🔁 daily  │ 🟢 100%      │ ✅ at 07:30 │ Feeding routine for cats [cat-     │
+│     │                             │       │            │               │           │              │             │ feeding]                           │
+│ 2   │ 🍖 Evening feeding          │     5 │ 🔴 High    │ prefers 18:00 │ 🔁 daily  │ 🟢 100%      │ ✅ at 18:00 │ Feeding routine for cats [cat-     │
+│     │                             │       │            │               │           │              │             │ feeding]                           │
+│ 3   │ 📌 Scoop litter box         │     5 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:35 │ Grooming and litter care for cats  │
+│     │                             │       │            │               │           │              │             │ [cat-grooming]                     │
+│ 4   │ 🎾 Interactive play session │    15 │ 🟡 Medium  │ prefers 19:00 │ 🔁 daily  │ 🟢 90%       │ ✅ at 19:00 │ Play and enrichment for cats [cat- │
+│     │                             │       │            │               │           │              │             │ play]                              │
+╰─────┴─────────────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────────╯
+(Confidence: 50% the model's own figure, 30% guide support, 20% schedule fit. Required tasks are marked ⭐.)
+========================================================================
+Nothing added.
+
+[exit status 0]

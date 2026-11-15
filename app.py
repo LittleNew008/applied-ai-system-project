@@ -249,7 +249,7 @@ def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
         for need in result.needs:
             st.markdown(f"- {need}")
         if not result.accepted:
-            st.info("Nothing new to suggest: the existing tasks already cover the usual care.")
+            st.info(display.no_suggestions_text(result.retrieved, result.rejected))
         report = result.report
         if result.retrieved:
             st.caption("Care guides used: " + "; ".join(f"{c.title} [{c.id}]" for c in result.retrieved))

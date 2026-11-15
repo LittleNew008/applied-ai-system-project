@@ -1,0 +1,20 @@
+$ .venv/bin/python evaluate.py
+# 2026-11-15 23:35:47 UTC | Python 3.13.15 | commit 066473b
+
+╭─────┬───────────────────────────────────────────┬──────────┬─────────┬────────────┬──────────┬──────────────┬──────────┬─────────╮
+│ #   │ Scenario                                  │ Result   │ Props   │ Rejected   │ Schema   │ Confidence   │ Checks   │ Notes   │
+├─────┼───────────────────────────────────────────┼──────────┼─────────┼────────────┼──────────┼──────────────┼──────────┼─────────┤
+│ 1   │ Healthy adult dog, no tasks               │ ✅ PASS  │ 7       │ 0          │ ✅ 2/2   │ 95% / 95%    │ 9/9      │         │
+│ 2   │ Cat with a partial routine                │ ✅ PASS  │ 2       │ 0          │ ✅ 2/2   │ 95% / 95%    │ 9/9      │         │
+│ 3   │ Senior dog on medication                  │ ✅ PASS  │ 8       │ 1          │ ✅ 2/2   │ 87% / 93%    │ 9/9      │         │
+│ 4   │ Bare-minimum pet (edge: nothing to go on) │ ✅ PASS  │ 0       │ 0          │ ✅ 2/2   │ -            │ 9/9      │         │
+│ 5   │ Over-capacity day (edge)                  │ ✅ PASS  │ 2       │ 0          │ ✅ 3/3   │ 95% / 95%    │ 10/10    │         │
+│ 6   │ Impossible required task (edge)           │ ✅ PASS  │ 1       │ 0          │ ✅ 3/3   │ 95% / 95%    │ 10/10    │         │
+│ 7   │ Model answers badly twice                 │ ✅ PASS  │ 7       │ 0          │ ✅ 3/5   │ 95% / 95%    │ 10/10    │         │
+│ 8   │ Invalid pet data (guardrail)              │ ✅ PASS  │ -       │ -          │ -        │ -            │ 3/3      │         │
+╰─────┴───────────────────────────────────────────┴──────────┴─────────┴────────────┴──────────┴──────────────┴──────────┴─────────╯
+Schema: ✅/❌ for the last model reply, then valid/total replies (needs, proposals and repairs). Confidence: lowest / average of the accepted proposals.
+8/8 scenarios passed
+Log written to /home/dev/applied-ai-system-final/evaluation_log.txt
+
+[exit status 0]

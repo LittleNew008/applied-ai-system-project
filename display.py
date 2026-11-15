@@ -254,6 +254,15 @@ def proposal_rows(proposals: Sequence["ProposedTask"], retrieved: Sequence["KBCh
     ]
 
 
+def no_suggestions_text(retrieved: Sequence["KBChunk"], rejected: Sequence) -> str:
+    """Why there is nothing to show: no care guide matched, every proposal failed validation, or nothing is missing."""
+    if not retrieved:
+        return "No matching care guides were found for this pet, so no suggestion could be backed by one."
+    if rejected:
+        return "No usable suggestions: every proposal failed validation (the reasons are listed below)."
+    return "Nothing new to suggest: the existing tasks already cover the usual care."
+
+
 def proposal_markdown(p: "ProposedTask") -> str:
     """The headline of a proposal for Streamlit: bold title, a red REQUIRED tag, then the details."""
     tag = " :red[**REQUIRED**]" if p.required else ""

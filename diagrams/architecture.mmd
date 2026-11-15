@@ -67,6 +67,7 @@ flowchart TD
         T_OUT(["tests/test_app_assistant.py<br/>tests/test_main_assistant.py<br/>tests/test_display_assistant.py<br/>tests/test_display.py<br/>tests/test_main.py"])
         EVAL(["evaluate.py: 8 scenarios, pass or fail table<br/>writes evaluation_log.txt<br/>tests/test_evaluate.py"])
         T_ARCH(["tests/test_architecture.py<br/>checks this diagram against the code"])
+        T_README(["tests/test_readme.py<br/>README sample runs, counts and tables"])
     end
 
     PETS --> REQ
@@ -115,6 +116,7 @@ flowchart TD
     T_OUT -.-> CLI
     EVAL -.-> AGENT
     T_ARCH -.-> AGENT
+    T_README -.-> CLI
 
     classDef guard fill:#fde8e8,stroke:#b42318,stroke-width:2px
     classDef human fill:#fff4d6,stroke:#b7791f,stroke-width:3px
@@ -123,6 +125,6 @@ flowchart TD
     classDef core fill:#f1f1f1,stroke:#555
     class VAL,SCHEMA,CHECK guard
     class HUMAN,REVIEW human
-    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH test
+    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README test
     class PETS,GUIDES,LIVE,LOG store
     class SCHED,ADD core

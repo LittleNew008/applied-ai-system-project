@@ -1,0 +1,64 @@
+$ printf '1\n' | env -u PAWPAL_OFFLINE OFFLINE_MODE=1 .venv/bin/python main.py assist --pet biscuit
+# 2026-11-15 23:35:48 UTC | Python 3.13.15 | commit 066473b
+
+✨ Care Assistant for 🐶 Biscuit - Sunday, November 15, 2026
+Mode: offline (OFFLINE_MODE is set); suggestions come from the built-in care guides.
+========================================================================
+Needs:
+  - Dog needs grooming and hygiene
+Care guides used:
+  - Grooming and hygiene for dogs [dog-grooming]
+  - Daily exercise for dogs [dog-exercise]
+  - Feeding routine for dogs [dog-feeding]
+
+╭─────┬───────────────────┬───────┬────────────┬──────────┬───────────┬──────────────┬─────────────┬───────────────────────────────╮
+│ #   │ Task              │   Min │ Priority   │ When     │ Repeats   │ Confidence   │ Fit         │ Sources                       │
+├─────┼───────────────────┼───────┼────────────┼──────────┼───────────┼──────────────┼─────────────┼───────────────────────────────┤
+│ 1   │ 🛁 Brush coat     │    10 │ 🟢 Low     │ any time │ 🔁 weekly │ 🟢 95%       │ ✅ at 07:10 │ Grooming and hygiene for dogs │
+│     │                   │       │            │          │           │              │             │ [dog-grooming]                │
+│ 2   │ 🛁 Tooth brushing │     5 │ 🟢 Low     │ any time │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:00 │ Grooming and hygiene for dogs │
+│     │                   │       │            │          │           │              │             │ [dog-grooming]                │
+╰─────┴───────────────────┴───────┴────────────┴──────────┴───────────┴──────────────┴─────────────┴───────────────────────────────╯
+(Confidence: 50% the model's own figure, 30% guide support, 20% schedule fit. Required tasks are marked ⭐.)
+========================================================================
+Add which? numbers like 1,3 | all | none | Enter = 1, 2: ✅ Added 1 task(s) to Biscuit: Brush coat
+
+🐾 Today's Schedule - Sunday, November 15, 2026
+Owner: Jordan | Pets: 🐶 Biscuit, 🐱 Mochi
+Available: 07:00-20:00
+========================================================================
+╭──────────────┬─────────────┬────────────┬───────────────────────┬───────┬────────────┬─────────────────────────────────────────────╮
+│ Status       │ Time        │ Pet        │ Task                  │   Min │ Priority   │ Why                                         │
+├──────────────┼─────────────┼────────────┼───────────────────────┼───────┼────────────┼─────────────────────────────────────────────┤
+│ ✅ Scheduled │ 07:00–07:05 │ 🐱 Mochi   │ 📌 Flea treatment     │     5 │ 🟢 Low     │ Scheduled (low priority): earliest free     │
+│              │             │            │                       │       │            │ slot, 07:00-07:05                           │
+│ ✅ Scheduled │ 07:05–07:15 │ 🐶 Biscuit │ 🛁 Brush coat         │    10 │ 🟢 Low     │ Scheduled (low priority): earliest free     │
+│              │             │            │                       │       │            │ slot, 07:05-07:15                           │
+│ ✅ Scheduled │ 07:30–08:00 │ 🐶 Biscuit │ 🐕 Morning walk       │    30 │ 🔴 High    │ Scheduled (high priority): at its preferred │
+│              │             │            │                       │       │            │ time, 07:30-08:00                           │
+│ ✅ Scheduled │ 08:00–08:05 │ 🐶 Biscuit │ 💊 Heart medication   │     5 │ 🔴 High    │ Scheduled (required, high priority): at its │
+│              │             │            │                       │       │            │ fixed time, 08:00-08:05                     │
+│ ✅ Scheduled │ 09:00–09:15 │ 🐱 Mochi   │ 🛁 Brush fur          │    15 │ 🟢 Low     │ Scheduled (low priority): at its preferred  │
+│              │             │            │                       │       │            │ time, 09:00-09:15                           │
+│ ✅ Scheduled │ 12:00–12:10 │ 🐶 Biscuit │ 🍖 Lunch feeding      │    10 │ 🔴 High    │ Scheduled (high priority): at its fixed     │
+│              │             │            │                       │       │            │ time, 12:00-12:10                           │
+│ ✅ Scheduled │ 15:30–15:50 │ 🐱 Mochi   │ 🎾 Laser-pointer play │    20 │ 🟡 Medium  │ Scheduled (medium priority): at its         │
+│              │             │            │                       │       │            │ preferred time, 15:30-15:50                 │
+│ ✅ Scheduled │ 18:00–18:25 │ 🐶 Biscuit │ 🎾 Evening fetch      │    25 │ 🟡 Medium  │ Scheduled (medium priority): at its         │
+│              │             │            │                       │       │            │ preferred time, 18:00-18:25                 │
+╰──────────────┴─────────────┴────────────┴───────────────────────┴───────┴────────────┴─────────────────────────────────────────────╯
+
+Not scheduled:
+╭──────────────────┬──────────┬──────────────────────┬───────┬────────────┬──────────────────────────────────────────╮
+│ Status           │ Pet      │ Task                 │   Min │ Priority   │ Why                                      │
+├──────────────────┼──────────┼──────────────────────┼───────┼────────────┼──────────────────────────────────────────┤
+│ ⛔ Not scheduled │ 🐱 Mochi │ 📌 Vet check-in call │    15 │ 🟡 Medium  │ Skipped (medium priority): fixed time    │
+│                  │          │                      │       │            │ 12:00-12:15 clashes with 'Lunch feeding' │
+│                  │          │                      │       │            │ (Biscuit) at 12:00-12:10                 │
+╰──────────────────┴──────────┴──────────────────────┴───────┴────────────┴──────────────────────────────────────────╯
+🚧 Vet check-in call (Mochi): Skipped (medium priority): fixed time 12:00-12:15 clashes with 'Lunch feeding' (Biscuit) at 12:00-12:10
+========================================================================
+8 scheduled (120 min), 1 skipped
+(Full step log of this run: ai_trace.jsonl, run id a6931ceffdef.)
+
+[exit status 0]

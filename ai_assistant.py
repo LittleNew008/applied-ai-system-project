@@ -991,6 +991,18 @@ def plan_needs(owner: Owner, pet: Pet, on: date, client: LLMClient, tracer: Trac
     return needs, terms
 
 
+def retrieval_terms(pet: Pet, model_terms: Sequence[str], focus_categories: Sequence[str]) -> list[str]:
+    """The words to search the knowledge base with: the model's suggested terms plus what we know ourselves.
+
+    A model tends to write search terms as phrases ("cat dental care"), which a keyword retriever cannot match as
+    one term. So the model's terms are split into words, stripped of filler words and plurals, and mapped to the
+    guides' tags exactly like a typed question is (`search_terms`), and the pet's own species, life stage, special
+    needs and the care categories it lacks are always added. Retrieval therefore never depends on the model's exact
+    wording; at worst the model's terms add nothing.
+    """
+    return list(dict.fromkeys(search_terms(pet, " ".join(model_terms)) + list(focus_categories)))
+
+
 def _issue_dicts(report: CheckReport) -> list[dict]:
     return [{"severity": i.severity, "code": i.code, "message": i.message, "task_title": i.task_title}
             for i in report.issues if i.severity != "info"]
@@ -1020,19 +1032,21 @@ def _validate(owner: Owner, pet: Pet, raw_proposals: Sequence[ProposedTask], fir
 
 def _run(owner: Owner, pet: Pet, on: date, config: AssistantConfig, client: LLMClient, mode: str,
          tracer: Tracer) -> AssistantResult:
-    needs, terms = plan_needs(owner, pet, on, client, tracer)
+    needs, model_terms = plan_needs(owner, pet, on, client, tracer)
+    context = _context(owner, pet, on)
 
     try:
         kb = load_knowledge_base(config.kb_dir)
     except (OSError, ValueError) as err:
         tracer.step("kb_error", error=str(err))
         kb = []
+    terms = retrieval_terms(pet, model_terms, context["focus_categories"])
     hits = retrieve(terms, kb, RETRIEVE_K, species=pet.species)
     retrieved = tuple(chunk for chunk, _ in hits)
     retrieved_ids = {c.id for c in retrieved}
-    tracer.step("retrieve", query_terms=terms, chunks=[{"id": c.id, "title": c.title, "score": s} for c, s in hits])
+    tracer.step("retrieve", query_terms=terms, model_query_terms=model_terms,
+                chunks=[{"id": c.id, "title": c.title, "score": s} for c, s in hits])
 
-    context = _context(owner, pet, on)
     context["needs"] = needs
     context["chunks"] = [_chunk_context(c) for c in retrieved]
     instruction = (f"Propose up to {config.max_proposals} care tasks for this pet, using only the reference "

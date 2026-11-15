@@ -197,7 +197,7 @@ def show_suggestions(pet: Pet, on: date, result: ai_assistant.AssistantResult, c
             print(f"  - {chunk.title} [{chunk.id}]")
     print()
     if not result.accepted:
-        print("Nothing new to suggest: the existing tasks already cover the usual care.")
+        print(display.no_suggestions_text(result.retrieved, result.rejected))
     else:
         print(display.render_table(display.proposal_rows(result.accepted, result.retrieved, result.report),
                                    wrap_column="Sources", wrap_width=34))

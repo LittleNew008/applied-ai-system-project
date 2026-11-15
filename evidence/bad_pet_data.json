@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "owner": {
+    "name": "Jordan",
+    "day_start": "07:00:00",
+    "day_end": "20:00:00",
+    "available_minutes": null,
+    "preferred_times": {},
+    "pets": [
+      {
+        "id": "rex-0001",
+        "name": "Rex",
+        "species": "dog",
+        "breed": "Beagle",
+        "age": 99,
+        "special_needs": "",
+        "tasks": []
+      }
+    ]
+  }
+}

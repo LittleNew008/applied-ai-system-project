@@ -200,3 +200,90 @@ def test_with_no_schedule_check_a_proposals_fit_counts_as_full():
                                              ("  tidy   text  ", "tidy text")])
 def test_clean_text_handles_anything_a_pet_field_might_hold(value, expected):
     assert ai.clean_text(value) == expected
+
+
+# ------------------------------------------------------------------ retrieval must not depend on the model's wording
+# (found in a real Gemini run: it wrote search terms as phrases, nothing matched, and every proposal was ungrounded)
+
+class Scripted:
+    model = "scripted"
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+
+    def generate_json(self, *, system, prompt, schema):
+        return self.replies.pop(0)
+
+
+def cat_item(**changes):
+    base = {"title": "Morning feeding", "duration_minutes": 5, "priority": "high", "category": "feeding",
+            "timing": "preferred", "time": "07:30", "recurrence": "daily", "required": False,
+            "description": "Breakfast.", "rationale": "Cats need routine.", "source_ids": ["cat-feeding"],
+            "confidence": 0.9}
+    return {**base, **changes}
+
+
+GEMINI_STYLE_TERMS = ["Siamese cat", "adult cat feeding guide", "cat dental care", "cat hydration tips",
+                      "cat litter box maintenance", "cat weight management"]
+
+
+def run_cat(tmp_path, query_terms, **pet_kwargs):
+    owner, pet = make_owner(name="Mochi", species="cat", breed="Siamese", age=2, **pet_kwargs)
+    needs = json.dumps({"needs": ["Feeding routine"], "query_terms": query_terms})
+    proposals = json.dumps({"proposals": [cat_item()]})
+    config = cfg(tmp_path, max_repairs=0)
+    return ai.propose_care_plan(owner, pet, TODAY, config=config, client=Scripted(needs, proposals)), config
+
+
+def test_phrase_style_search_terms_from_a_model_still_find_the_guides(tmp_path):
+    result, config = run_cat(tmp_path, GEMINI_STYLE_TERMS)
+    assert {"cat-feeding", "cat-grooming"} <= {c.id for c in result.retrieved}
+    assert [p.title for p in result.accepted] == ["Morning feeding"] and result.rejected == ()
+    retrieve_step = next(json.loads(l) for l in config.trace_path.read_text().splitlines() if '"retrieve"' in l)
+    assert retrieve_step["model_query_terms"] == GEMINI_STYLE_TERMS  # what the model asked for is kept in the log
+    assert {"cat", "feeding", "teeth"} <= set(retrieve_step["query_terms"])  # words, mapped to the guides' tags
+
+
+def test_search_terms_that_match_nothing_do_not_leave_the_assistant_without_guides(tmp_path):
+    result, _ = run_cat(tmp_path, ["zzzz qqqq", "nonsense"])
+    assert result.retrieved and all("dog" not in c.tags for c in result.retrieved)
+    assert [p.title for p in result.accepted] == ["Morning feeding"]
+
+
+def test_no_model_terms_at_all_still_retrieves_from_the_pet_itself(tmp_path):
+    result, _ = run_cat(tmp_path, [])
+    assert "cat-feeding" in {c.id for c in result.retrieved}
+
+
+def test_retrieval_terms_combine_model_terms_pet_facts_and_missing_categories_without_duplicates():
+    pet = Pet("Rex", "dog", age=11, special_needs="daily pill")
+    terms = ai.retrieval_terms(pet, ["senior dog dental care", "pills"], ["walk", "meds"])
+    assert {"dog", "senior", "teeth", "grooming", "meds", "medication", "walk"} <= set(terms)
+    assert len(terms) == len(set(terms))
+    assert ai.retrieval_terms(Pet("Pip", "other"), [], []) == ["other"]
+
+
+# ------------------------------------------------------------------ the message says why there is nothing to show
+
+def test_the_empty_result_message_names_the_real_reason():
+    import display
+
+    guide = ai.KBChunk("g", "Guide", "", frozenset())
+    rejection = ai.Rejection(0, "bad", {})
+    assert "No matching care guides" in display.no_suggestions_text((), ())
+    assert "No matching care guides" in display.no_suggestions_text((), (rejection,))  # nothing was retrieved: say that first
+    assert "failed validation" in display.no_suggestions_text((guide,), (rejection,))
+    assert display.no_suggestions_text((guide,), ()).startswith("Nothing new to suggest")
+
+
+def test_the_command_line_does_not_claim_the_pet_is_covered_when_every_proposal_was_rejected(capsys, tmp_path, monkeypatch):
+    import main
+
+    owner, pet = make_owner()
+    bad = json.dumps({"proposals": [cat_item(source_ids=["invented"])]})
+    needs = json.dumps({"needs": ["x"], "query_terms": ["dog"]})
+    monkeypatch.setattr(ai, "make_client", lambda config: Scripted(needs, bad, bad))
+    main.assistant_flow(owner, pet, TODAY, accept="none", config=cfg(tmp_path, offline=False, api_key="test-key-0123456789"))
+    out = capsys.readouterr().out
+    assert "No usable suggestions: every proposal failed validation" in out and "Nothing new to suggest" not in out
+    assert "not among the provided reference notes" in out
