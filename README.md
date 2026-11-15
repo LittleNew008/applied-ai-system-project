@@ -26,7 +26,7 @@ A busy pet owner needs help staying consistent with pet care. They want an assis
 - **Remembers your data.** Pets and tasks are saved to `data.json` automatically (`Owner.save_to_json`) and loaded the next time (`Owner.load_from_json`). A damaged file is set aside, never overwritten. See [Data persistence](#-data-persistence).
 - **Easy to read.** An emoji for each kind of pet and task (🐶 🐱, 💊 🐕 🍖 🎾 🛁), color-coded priority (🔴 🟡 🟢) and status (✅ scheduled, ⛔ not scheduled, 🚨 required task left out), a red REQUIRED tag, green / blue / red task status (done / starts later / overdue), and aligned tables in both the app and the terminal.
 - **Safe input.** Blank names, non-positive durations, impossible day windows and duplicate pets are rejected with a clear message.
-- **Tested.** 314 automated tests cover the backend, the app, the formatting, the demo and the class diagram.
+- **Tested.** 401 automated tests cover the backend, the app, the formatting, the demo, the class diagram and the Care Assistant.
 
 ## 🏆 Extra-credit challenges
 
@@ -54,7 +54,7 @@ New to the app? Open it and press **Load sample data** to get two pets and eight
 
 ## 🧩 Implementation Summary
 
-**What was built.** The backend is in [pawpal_system.py](pawpal_system.py): a small domain model plus a `Scheduler` that turns it into a one-day plan with a reason for every decision. [main.py](main.py) is a command-line demo, [app.py](app.py) is the Streamlit UI, connected to those classes. The pytest suite (314 tests) is in [tests/](tests/): the backend ([test_pawpal.py](tests/test_pawpal.py)), the real app run headlessly ([test_app.py](tests/test_app.py)), the display formatting ([test_display.py](tests/test_display.py)), the command-line demo ([test_main.py](tests/test_main.py)) and the diagram ([test_uml.py](tests/test_uml.py)). [display.py](display.py) turns results into emoji, color-coded badges and tables for both the app and the terminal. The final class diagram is [diagrams/uml_final.mmd](diagrams/uml_final.mmd) (Mermaid source; `tests/test_uml.py` checks it against the code). The picture below is a rendering of it.
+**What was built.** The backend is in [pawpal_system.py](pawpal_system.py): a small domain model plus a `Scheduler` that turns it into a one-day plan with a reason for every decision. [main.py](main.py) is a command-line demo, [app.py](app.py) is the Streamlit UI, connected to those classes. The pytest suite (401 tests) is in [tests/](tests/): the backend ([test_pawpal.py](tests/test_pawpal.py)), the real app run headlessly ([test_app.py](tests/test_app.py)), the display formatting ([test_display.py](tests/test_display.py)), the command-line demo ([test_main.py](tests/test_main.py)) and the diagram ([test_uml.py](tests/test_uml.py)). [display.py](display.py) turns results into emoji, color-coded badges and tables for both the app and the terminal. The final class diagram is [diagrams/uml_final.mmd](diagrams/uml_final.mmd) (Mermaid source; `tests/test_uml.py` checks it against the code). The picture below is a rendering of it.
 
 ![PawPal+ class diagram](diagrams/uml_final.png)
 
@@ -206,7 +206,7 @@ python -m pytest
 
 `pytest.ini` points pytest at `tests/` and the project root, so no other setup is needed. To run one file, name it (for example `python -m pytest tests/test_pawpal.py`); add `-v` to list each test.
 
-**What the tests cover.** There are 314 tests: 208 on the backend (`tests/test_pawpal.py`), 50 that drive the real Streamlit app headlessly (`tests/test_app.py`), 37 on the emoji, badges and tables (`tests/test_display.py`), 15 that check the UML diagram against the code (`tests/test_uml.py`) and 4 that run the command-line demo (`tests/test_main.py`). They check these core behaviors, each with happy paths and edge cases:
+**What the tests cover.** There are 401 tests: 208 on the backend (`tests/test_pawpal.py`), 50 that drive the real Streamlit app headlessly (`tests/test_app.py`), 37 on the emoji, badges and tables (`tests/test_display.py`), 15 that check the UML diagram against the code (`tests/test_uml.py`), 4 that run the command-line demo (`tests/test_main.py`) and 87 on the Care Assistant (`tests/test_ai_assistant.py`, `tests/test_retriever.py`, `tests/test_app_assistant.py`; all offline). They check these core behaviors, each with happy paths and edge cases:
 
 | Core behavior | Happy path | Edge cases |
 |---|---|---|
@@ -236,7 +236,7 @@ rootdir: /home/dev/ai110-module2show-pawpal-starter
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.15.1
-collected 314 items
+collected 401 items
 
 tests/test_app.py ..................................................     [ 15%]
 tests/test_display.py .....................................              [ 27%]
@@ -247,12 +247,12 @@ tests/test_pawpal.py ................................................... [ 45%]
 .............                                                            [ 95%]
 tests/test_uml.py ...............                                        [100%]
 
-============================= 314 passed in 6.51s ==============================
+============================= 401 passed in 8.0s ==============================
 ```
 
 **Confidence level: ★★★★☆ (4 out of 5).**
 
-Why it is high: every one of the 314 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
+Why it is high: every one of the 401 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
 
 Why it is not 5: the tests were written by the same AI assistant that wrote the code, so they can share its blind spots (injecting deliberate bugs reduces this but does not remove it); the UI is tested headlessly and in screenshots, and has had only a brief hand check in a browser; the data file is single-user and local; the planner is greedy by design, so tests prove its plans are valid, not that they are the best possible; and overnight days, time zones and seconds in times are not supported (seconds are truncated, and a test documents that). Code coverage has not been measured.
 
@@ -440,6 +440,33 @@ Not scheduled:
   💾 Loaded it back: 2 pets and 10 tasks; identical to the original: True
 ```
 
+## ✨ Care Assistant (AI task suggestions)
+
+The "Care Assistant" panel in the Tasks section suggests care tasks for the selected pet. It never changes the schedule by itself: it proposes, you tick what you want, and only then are tasks added through the normal `Pet.add_task`. The scheduler's rules are unchanged.
+
+**What it does** ([ai_assistant.py](ai_assistant.py)), logging every step to a trace file:
+
+1. **Plan needs:** works out which care categories the pet has no open task for (plus medication if its special needs mention it).
+2. **Retrieve (RAG):** looks up matching care guides in [knowledge/](knowledge/) with `search_knowledge(pet, query, kb, k)`: the pet (species, life stage, special needs) and the question become terms, scored by tag and keyword match (deterministic, no embeddings; another species's guides are never returned).
+3. **Propose:** asks the model for tasks as strict JSON that must cite the guides it used.
+4. **Validate:** the reply must be exactly the expected JSON (no prose or code fences); each proposal is checked field by field, de-duplicated against the pet's open tasks, and built with the normal `Task` constructor. A bad proposal is rejected on its own; an unusable reply is retried once and then answered offline.
+5. **Self-check:** the proposals are tried on a *copy* of the owner and compared with the plan as it stands: tasks that would not be scheduled, existing tasks pushed out, new clashes, the daily limit. Problems are fed back to the model for one repair round, and shown in the app.
+
+**Setup.** The key is read from an environment variable and is never stored in the repo (`.env` and `ai_trace.jsonl` are in `.gitignore`):
+
+```bash
+export GEMINI_API_KEY=...              # your key; without it the assistant runs offline
+export PAWPAL_GEMINI_MODEL=...         # optional; default gemini-3.1-flash-lite (a low-cost Flash-Lite model)
+export PAWPAL_OFFLINE=1                # optional: force the offline assistant
+export PAWPAL_TRACE_FILE=ai_trace.jsonl   # optional: where the step trace goes
+```
+
+**Offline mode** is deterministic and needs no network: it answers from the same knowledge-base notes with rule-based logic. It is used when `PAWPAL_OFFLINE` is set, when there is no key or the `google-genai` package is missing, and as the fallback if a Gemini call fails. All tests run offline (`tests/conftest.py` forces it), so `python -m pytest` needs no key and no network.
+
+**Privacy.** In online mode the pet's species, breed, age, special needs, its open task titles and the day window are sent to Google. The trace file records prompt and reply sizes and hashes, the retrieved guide ids, and validation results, never the key.
+
+**Limits.** The guides are a small hand-written starting set, not veterinary advice; the assistant is told not to give dosing and the guides say to follow your vet. Retrieval is keyword-based, so unusual species get only the general guides.
+
 ## Project layout
 
 ```
@@ -447,7 +474,9 @@ app.py                Streamlit UI (no planning logic; it calls the classes belo
 main.py               command-line demo; also supplies the sample data for the app
 pawpal_system.py      Owner, Pet, Task, PetTask, Scheduler, DailyPlan and the other classes, plus saving and loading
 display.py            emoji, color-coded badges and table rows, shared by the app and the terminal demo
-tests/                test_pawpal.py, test_app.py, test_display.py, test_main.py, test_uml.py
+ai_assistant.py       the Care Assistant: plans needs, retrieves from knowledge/, proposes strict-JSON tasks, self-checks
+knowledge/            the Care Assistant's local knowledge base (markdown care guides with a tag header)
+tests/                test_pawpal.py, test_app.py, test_display.py, test_main.py, test_uml.py, test_ai_assistant.py, test_retriever.py, test_app_assistant.py
 diagrams/             uml_final.mmd (Mermaid source), uml_final.png (rendering), uml.mmd (identical older copy)
 screenshots/          the UI screenshots shown above
 data.json             your saved pets and tasks (created by the app; not in git)

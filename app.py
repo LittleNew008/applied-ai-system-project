@@ -10,6 +10,7 @@ from pathlib import Path
 
 import streamlit as st
 
+import ai_assistant
 import display
 from main import build_owner as build_sample_owner  # the same sample data the command-line demo uses
 from pawpal_system import Category, DailyPlan, Owner, Pet, Priority, Recurrence, Scheduler, Task
@@ -201,6 +202,75 @@ def describe_task(task: Task, today: date) -> str:
     return f"{display.category_icon(task.category)} **{task.title}**{status} - " + ", ".join(parts)
 
 
+def dismiss_suggestions() -> None:
+    """Button callback: throw away the assistant's pending proposals."""
+    st.session_state.pop("ai_result", None)
+
+
+def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
+    """Ask the Care Assistant for task ideas for `pet`, review them, and add the ones the user ticks.
+
+    The assistant only proposes; nothing reaches the pet's task list until "Add selected" is pressed.
+    """
+    config = ai_assistant.AssistantConfig.from_env()
+    with st.expander("✨ Care Assistant: suggest tasks"):
+        if config.offline:
+            st.caption(f"Offline mode ({config.offline_reason}): suggestions come from the built-in care guides, "
+                       "with no network use.")
+        else:
+            st.caption(f"Using Gemini ({config.model}). Pet details and task titles are sent to Google when you "
+                       "ask for suggestions.")
+        if st.button(f"Suggest tasks for {pet.name}", key="ai_suggest"):
+            with st.spinner("Planning..."):
+                st.session_state.ai_result = (pet.id, ai_assistant.propose_care_plan(owner, pet, today, config=config))
+
+        stored = st.session_state.get("ai_result")
+        if not stored or stored[0] != pet.id:
+            return
+        result = stored[1]
+        if result.fell_back:
+            st.warning(f"Gemini could not be used ({result.fallback_reason}), so these suggestions come from the "
+                       "built-in care guides.")
+        for need in result.needs:
+            st.markdown(f"- {need}")
+        if not result.accepted:
+            st.info("Nothing new to suggest: the existing tasks already cover the usual care.")
+        report = result.report
+        picks = []
+        for i, p in enumerate(result.accepted):
+            task_type = f"{display.category_icon(Category(p.category))} {display.priority_badge(Priority.from_str(p.priority))}"
+            when = f"{p.time} ({p.timing})" if p.time else "flexible"
+            slot = report.suggested_slots.get(p.title) if report else None
+            slot_text = f" Next free slot: {slot[0]:%H:%M}-{slot[1]:%H:%M}." if slot else ""
+            tag = " :red[**REQUIRED**]" if p.required else ""
+            problems = [f"{display.CLASH_ICON} {issue.message}" for issue in (report.issues if report else ())
+                        if issue.task_title == p.title and issue.severity != "info"]
+            checked = st.checkbox(
+                f"**{p.title}**{tag}: {p.duration_minutes} min, {task_type}, {when}, {p.recurrence}",
+                value=not p.required, key=f"ai_pick_{result.trace_id}_{i}",
+                help="Required tasks start unticked: tick one only if it is right for this pet.")
+            st.caption(f"{p.rationale} (sources: {', '.join(p.source_ids)}).{slot_text}")
+            for problem in problems:
+                st.warning(problem)
+            if checked:
+                picks.append(p.title)
+        for issue in (report.issues if report else ()):
+            if issue.task_title is None and issue.severity != "info":
+                st.warning(issue.message)
+        if result.rejected:
+            with st.expander(f"{len(result.rejected)} suggestion(s) left out"):
+                for r in result.rejected:
+                    st.caption(r.reason)
+        c_add, c_dismiss = st.columns(2)
+        add = c_add.button("Add selected", key="ai_add", disabled=not picks, type="primary")
+        c_dismiss.button("Dismiss", key="ai_dismiss", on_click=dismiss_suggestions)
+        st.caption(f"Trace of this run: {config.trace_path.name} (id {result.trace_id}).")
+        if add:
+            created = ai_assistant.commit(owner, pet, result, picks, today)
+            st.session_state.pop("ai_result", None)
+            rerun_after(f"Added {len(created)} suggested task(s) for {pet.name}.")
+
+
 owner = get_owner()
 today = date.today()
 
@@ -347,6 +417,8 @@ else:
             st.error(str(err))
         else:
             rerun_after(f"Added '{title.strip()}'.")
+
+    care_assistant_panel(owner, current_pet, today)
 
     st.markdown("**Task list**")
     f_scope, f_status = st.columns(2)
