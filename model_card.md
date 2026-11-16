@@ -15,7 +15,7 @@ The Care Assistant suggests care tasks for a pet in the PawPal+ app. This card s
 | **Unchanged** | The scheduler: `pawpal_system.py` has no changes since commit `e25ce27`, the last commit before this work. |
 
 <!-- BEGIN generated:test-total -->
-**686 automated tests** (the original 314 unchanged), all offline, and **8 of 8** evaluation scenarios passing offline ([evaluation_log.txt](evaluation_log.txt)).
+**687 automated tests** (the original 314 unchanged), all offline, and **8 of 8** evaluation scenarios passing offline ([evaluation_log.txt](evaluation_log.txt)).
 <!-- END generated:test-total -->
 
 ## 1. System limitations and biases
@@ -28,7 +28,7 @@ The Care Assistant suggests care tasks for a pet in the PawPal+ app. This card s
 
 **"Grounded" is weaker than it sounds.**
 - A proposal must cite a retrieved guide, and the app shows the citation. That proves the proposal came from a guide, not that the advice is right for this pet. The guides are short, hand-written and unreviewed by an expert, so a confident, well-cited suggestion can still be wrong or generic.
-- The model mostly copies the guides. In the live comparison below, **all 19 accepted proposals had exactly the title of a task template in a guide**. The prompt includes those templates and tells the model to use only the reference notes, so it behaves as a selector over the templates, not as an author. The value of the system is the retrieval, the checks and the human review around the model, more than the model's own creativity.
+- The model mostly copies the guides. In the live comparison below, **all 19 accepted proposals had exactly the title of a task template in a guide**. The prompt includes those templates and tells the model to use only the reference notes, so in that comparison it behaved as a selector over the templates, not as an author. It can go beyond them when a category has few: in one live sample for the demo cat (recorded on 16 November 2026 in [evidence/live_sample_demo_cat_2026-11-16.txt](evidence/live_sample_demo_cat_2026-11-16.txt); the README's second sample is re-recorded each time the evidence script runs, so it may differ), where only feeding was missing and its guide has two templates, Gemini also proposed "Monitor water intake" and "Puzzle feeder session", which are in no guide, citing the feeding guide. Those are grounded only in the loose sense that they mention feeding. The value of the system is the retrieval, the checks and the human review around the model, more than the model's own creativity.
 
 **Confidence is a heuristic, not a probability.**
 - The score is 50% the model's own figure, 30% whether a cited guide covers that kind of task, and 20% how the trial schedule placed it. The weights are my judgment, not fitted to data. Because the model copies templates and rates itself near 100%, scores of 94 to 100% in the live runs carry little information.
@@ -36,7 +36,7 @@ The Care Assistant suggests care tasks for a pet in the PawPal+ app. This card s
 
 **Detection rules are shallow.**
 - Medication is detected from a short keyword list in the pet's special needs ("medic", "pill", "insulin", "tablet", "drops", "injection", "prescri", "meds"). A pet whose needs say "epilepsy" or "diabetes" without one of those words gets no medication suggestion.
-- De-duplication matches the same title, category and repeat only. In the live run for the demo cat, Gemini proposed "Interactive play session" although the cat already had "Laser-pointer play". A person has to notice.
+- De-duplication matches the same title, category and repeat only (a test shows a near-duplicate with a different title getting through). In an earlier live run for the demo cat, Gemini proposed "Interactive play session" although the cat already had "Laser-pointer play"; that run's output was overwritten and is not saved, so the evidence for this is the test. A person has to notice.
 
 **Scheduling and reporting limits.**
 - Plans cover one day and one owner and are greedy (important tasks first), so they are valid and explainable but not optimal. The self-check only reflects the day chosen.
@@ -81,7 +81,7 @@ An instruction was placed in each user-controlled field and the real model was r
 
 1. **All the tests were green while the first real model call returned nothing.** My 580 tests passed, yet the first live Gemini run produced no usable suggestions. Gemini wrote its search terms as phrases ("cat dental care", "adult cat feeding guide"); my retriever treated each phrase as one keyword, matched nothing, and the grounding check then correctly rejected every proposal as having no real source. My tests had all used single-word search terms, my own vocabulary, so they could not see it. The comparison below shows the effect: with the model's terms used as written, 3 of 4 pets got nothing.
 2. **With no guides the model invents sources.** Without retrieval, none of the 21 proposals cited a real guide. In the very first failed live run it cited `needs`, the name of a field in its own prompt, as a source (I saw this in the terminal; that output was overwritten and is not saved in `evidence/`). The grounding rule rejected all of them, which is what it is for.
-3. **The model mostly copies the templates (section 1).** I expected the model to write its own tasks, and I did not expect 19 of 19 accepted titles to match a guide's template word for word.
+3. **The model mostly copies the templates (section 1).** I expected the model to write its own tasks, and I did not expect 19 of 19 accepted titles to match a guide's template word for word (it does write its own when a category has few templates, as in the cat sample above).
 4. **My own checking tools were wrong three times.** The first run of the evaluation harness failed one scenario because its check read the state before the repair, not after. A one-letter fake key in a test garbled the trace log, because secret scrubbing replaced every "k". And my evidence script recorded "exit status 0" for a run in which a test had failed, because it read the status after an intervening command. Each was found only because I checked the checker.
 5. **A test can keep a bad record alive.** When I made a test inspect the README's pasted record of the previous test run, a failing run kept re-recording itself. The fix was that a test must not judge the record of its own earlier run; that check now lives in the sync script.
 6. **The model "gives up" quietly.** When a repair round gave it nothing to cite, it returned an empty list instead of inventing, which is the right behaviour, but it also made the earlier rejection reasons disappear from the screen (section 1).

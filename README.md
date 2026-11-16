@@ -348,7 +348,7 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 ## 7. Testing summary
 
 <!-- BEGIN generated:tests-per-file -->
-**686 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
+**687 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
 
 | Test file | Tests | What it checks |
 |---|---:|---|
@@ -368,10 +368,10 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 | `tests/test_evaluate.py` | 18 | evaluate.py: scenarios, schema measurement, summary and log |
 | `tests/test_guardrails.py` | 47 | schema validation and repair, input validation, confidence scores, offline switch, step log |
 | `tests/test_main_assistant.py` | 37 | the Care Assistant on the command line |
-| `tests/test_model_card.py` | 27 | model_card.md: its tables, numbers and every limitation it states, against the code and evidence |
+| `tests/test_model_card.py` | 28 | model_card.md: its tables, numbers and every limitation it states, against the code and evidence |
 | `tests/test_readme.py` | 23 | this README against the files and runs it quotes |
 | `tests/test_retriever.py` | 26 | the retriever: scoring, top-k, species and life-stage filters, pet and query search |
-| **Total** | **686** | |
+| **Total** | **687** | |
 <!-- END generated:tests-per-file -->
 
 - **Offline and keyless.** `tests/conftest.py` forces offline mode, removes any `GEMINI_API_KEY` and never reads the real `.env`. As an independent check, `scripts/block_network.py` refuses and counts every outbound connection: the full suite passes with a fake key set and **0 network attempts**.

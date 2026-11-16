@@ -326,3 +326,14 @@ def test_the_age_rule_the_card_states_is_the_age_rule_in_the_code(text):
     young, senior = int(young), int(senior)
     assert ai._age_stage(young) == "young" and ai._age_stage(young + 1) is None
     assert ai._age_stage(senior) == "senior" and ai._age_stage(senior - 1) is None
+
+
+def test_the_proposals_the_card_says_are_in_no_guide_really_are_in_no_guide(text, kb):
+    titles = {t["title"].strip().casefold() for c in kb for t in c.templates}
+    snapshot = (ROOT / "evidence" / "live_sample_demo_cat_2026-11-16.txt").read_text(encoding="utf-8")
+    assert "Mode: Gemini" in snapshot and "evidence/live_sample_demo_cat_2026-11-16.txt" in text
+    for invented in ("Monitor water intake", "Puzzle feeder session"):
+        assert f'"{invented}"' in text and invented in snapshot  # the recorded run really contains them
+        assert invented.casefold() not in titles  # the card's claim: these are not templates of any guide
+    # and the comparison's claim that the accepted ones were templates is the recorded table's, not an assumption
+    assert "19 (100%)" in generated(text, "rag-totals")
