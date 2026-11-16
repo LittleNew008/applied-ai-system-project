@@ -53,6 +53,7 @@ TEST_FILE_NOTES = {
     "test_architecture.py": "diagrams/architecture.mmd against the code",
     "test_readme.py": "this README against the files and runs it quotes",
     "test_deliverables.py": "the required files exist, and ai_interactions.md holds real agent traces",
+    "test_conflicts.py": "fixing a clash: which tasks clash, where one can move, and the Move / Let planner choose / Delete buttons",
     "test_model_card.py": "model_card.md: its tables, numbers and every limitation it states, against the code and evidence",
 }
 

@@ -69,7 +69,7 @@ flowchart TD
         T_LLM(["tests/test_ai_assistant.py<br/>tests/test_ai_assistant_errors.py<br/>stubbed Gemini, scripted and offline models"])
         T_SCHEMA(["tests/test_guardrails.py<br/>schema, repair and confidence"])
         T_CHECK(["tests/test_ai_assistant_errors.py<br/>self-check and error paths"])
-        T_CORE(["tests/test_pawpal.py<br/>tests/test_uml.py<br/>scheduler rules and class diagram"])
+        T_CORE(["tests/test_pawpal.py<br/>tests/test_uml.py<br/>tests/test_conflicts.py<br/>scheduler rules, class diagram, clash fixes"])
         T_STORE(["tests/test_app.py<br/>autosave and reload"])
         T_ENV(["tests/test_dotenv.py<br/>.env loading, git ignore"])
         T_OUT(["tests/test_app_assistant.py<br/>tests/test_main_assistant.py<br/>tests/test_display_assistant.py<br/>tests/test_display.py<br/>tests/test_main.py"])
@@ -360,7 +360,7 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 ## 7. Testing summary
 
 <!-- BEGIN generated:tests-per-file -->
-**689 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
+**700 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
 
 | Test file | Tests | What it checks |
 |---|---:|---|
@@ -374,6 +374,7 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 | `tests/test_app_assistant.py` | 10 | the Care Assistant tab in the app: suggest, review, add |
 | `tests/test_app_layout.py` | 16 | the app's tabs, the ways into the assistant, the pet chooser, collapsing forms, the narrow page |
 | `tests/test_architecture.py` | 14 | diagrams/architecture.mmd against the code |
+| `tests/test_conflicts.py` | 11 | fixing a clash: which tasks clash, where one can move, and the Move / Let planner choose / Delete buttons |
 | `tests/test_deliverables.py` | 34 | the required files exist, and ai_interactions.md holds real agent traces |
 | `tests/test_display_assistant.py` | 15 | formatting of proposals shared by the app and the CLI |
 | `tests/test_dotenv.py` | 16 | .env loading and keeping it out of git |
@@ -383,7 +384,7 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 | `tests/test_model_card.py` | 28 | model_card.md: its tables, numbers and every limitation it states, against the code and evidence |
 | `tests/test_readme.py` | 25 | this README against the files and runs it quotes |
 | `tests/test_retriever.py` | 26 | the retriever: scoring, top-k, species and life-stage filters, pet and query search |
-| **Total** | **689** | |
+| **Total** | **700** | |
 <!-- END generated:tests-per-file -->
 
 - **Offline and keyless.** `tests/conftest.py` forces offline mode, removes any `GEMINI_API_KEY` and never reads the real `.env`. As an independent check, `scripts/block_network.py` refuses and counts every outbound connection: the full suite passes with a fake key set and **0 network attempts**.

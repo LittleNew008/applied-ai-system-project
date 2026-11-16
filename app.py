@@ -14,6 +14,7 @@ import streamlit as st
 try:
     import ai_assistant
     import display
+    from conflicts import conflict_pairs, find_move_slot
     from main import build_owner as build_sample_owner  # the same sample data the command-line demo uses
     from pawpal_system import Category, DailyPlan, Owner, Pet, Priority, Recurrence, Scheduler, Task
 except ModuleNotFoundError as err:  # almost always: Streamlit was started with a Python that is not the project's .venv
@@ -260,6 +261,65 @@ def assistant_callout(pet: Pet) -> None:
                           width="stretch")
 
 
+def find_task_owner(task_id: str) -> tuple[Pet, Task]:
+    """The pet and task with `task_id` (callbacks pass ids, never objects, because the Owner can be replaced)."""
+    for pt in get_owner().get_all_tasks():
+        if pt.task.id == task_id:
+            return pt.pet, pt.task
+    raise KeyError(task_id)
+
+
+def move_task(task_id: str, new_time: time) -> None:
+    """Button callback: give a clashing task a new fixed time."""
+    pet, task = find_task_owner(task_id)
+    pet.edit_task(task_id, fixed_time=new_time)
+    flash(f"{display.SLOT_ICON} Moved '{task.title}' ({pet.name}) to {new_time:%H:%M}.")
+
+
+def make_flexible(task_id: str) -> None:
+    """Button callback: drop a clashing task's fixed time but keep it as the preferred time, so the planner
+    uses that time when it is free and otherwise the earliest gap that fits."""
+    pet, task = find_task_owner(task_id)
+    pet.edit_task(task_id, preferred_start=task.fixed_time, fixed_time=None)
+    flash(f"'{task.title}' ({pet.name}) is now flexible: the planner will pick a free time for it.")
+
+
+def delete_clashing_task(task_id: str) -> None:
+    """Button callback: remove a task that clashes with another."""
+    pet, task = find_task_owner(task_id)
+    pet.remove_task(task_id)
+    flash(f"Deleted '{task.title}' ({pet.name}).")
+
+
+def conflict_panel(scheduler: Scheduler, today: date) -> None:
+    """Amber warning for each pair of overlapping fixed-time tasks, with buttons to fix it: for either task,
+    move it to a free slot, let the planner choose its time, or delete it."""
+    pairs = conflict_pairs(scheduler, today)
+    if not pairs:
+        return
+    st.caption("You cannot do two things at once, so the schedule keeps the more important task and lists the "
+               "other as not scheduled. Edit one task's time below to keep both, or fix each clash with the buttons.")
+    for (a, b), message in zip(pairs, scheduler.find_conflicts(today)):
+        with st.container(border=True):
+            st.warning(message)
+            for pt, other in ((a, b), (b, a)):
+                task = pt.task
+                c_name, c_move, c_flex, c_delete = st.columns([3, 3, 3, 2], vertical_alignment="center")
+                c_name.markdown(f"**{task.title}** ({pt.pet.name})")
+                suffix = f"{task.id}_{other.task.id}"  # a task can clash with several others
+                target = find_move_slot(scheduler, task, today)
+                if target is None:
+                    c_move.caption("No free slot to move to")
+                else:
+                    c_move.button(f"{display.SLOT_ICON} Move to {target:%H:%M}", key=f"clash_move_{suffix}",
+                                  on_click=move_task, args=(task.id, target), width="stretch")
+                c_flex.button("Let planner choose", key=f"clash_flex_{suffix}", on_click=make_flexible,
+                              args=(task.id,), width="stretch",
+                              help="Keeps its time as a preference, but the planner may place it elsewhere")
+                c_delete.button("Delete", key=f"clash_delete_{suffix}", type="tertiary",
+                                on_click=delete_clashing_task, args=(task.id,), width="stretch")
+
+
 # ---------------------------------------------------------------- tab 1: pets and tasks
 def pets_tab(owner: Owner, current_pet: Pet | None, today: date) -> None:
     """Add pets, pick one, add and manage its tasks."""
@@ -317,12 +377,7 @@ def pets_tab(owner: Owner, current_pet: Pet | None, today: date) -> None:
         )
     elif due_minutes:
         st.caption(f"Today: {due_minutes} of {capacity} available minutes are planned.")
-    conflicts = scheduler.find_conflicts(today)  # fixed-time tasks that overlap, for any pets
-    for conflict in conflicts:
-        st.warning(conflict)
-    if conflicts:
-        st.caption("You cannot do two things at once, so the schedule keeps the more important task and lists the "
-                   "other as not scheduled. Edit one task's time below to keep both.")
+    conflict_panel(scheduler, today)
 
     # Open while the pet has no tasks (the obvious next step), then tucked away to keep the page short.
     with st.expander(f"➕ Add a task for {current_pet.name}", expanded=not current_pet.tasks):
