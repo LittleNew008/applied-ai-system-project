@@ -13,7 +13,7 @@ flowchart TD
     subgraph IN["1. Input"]
         PETS[("Owner, pets and tasks<br/>pawpal_system.Owner<br/>live copy in the app session, saved to data.json")]
         ENV["Settings and API key<br/>.env (git-ignored) or the environment<br/>ai_assistant.load_env_file<br/>ai_assistant.AssistantConfig.from_env"]
-        REQ["Request: one pet and a date<br/>UI: app.care_assistant_panel<br/>CLI: main.assistant_flow"]
+        REQ["Request: one pet and a date<br/>UI: app.ai_tab, or app.assistant_callout<br/>CLI: main.assistant_flow"]
     end
 
     subgraph AGENT["2. Care Assistant agent: ai_assistant.propose_care_plan (read-only on the live owner)"]
@@ -41,7 +41,7 @@ flowchart TD
     end
 
     subgraph OUT["3. Output and human review"]
-        UI["Streamlit panel<br/>app.care_assistant_panel<br/>display.proposal_markdown, display.proposal_detail"]
+        UI["Streamlit tab: AI Care Assistant<br/>app.ai_tab<br/>display.proposal_markdown, display.proposal_detail"]
         CLI["Command line<br/>main.assistant_flow<br/>display.proposal_rows, display.render_table"]
         HUMAN{"HUMAN REVIEW<br/>tick tasks (UI) or answer Add which (CLI)<br/>required and under 50% confidence start unticked"}
         COMMIT["Add only the accepted titles<br/>ai_assistant.commit"]
@@ -68,6 +68,7 @@ flowchart TD
         EVAL(["evaluate.py: 8 scenarios, pass or fail table<br/>writes evaluation_log.txt<br/>tests/test_evaluate.py"])
         T_ARCH(["tests/test_architecture.py<br/>checks this diagram against the code"])
         T_README(["tests/test_readme.py<br/>README sample runs, counts and tables"])
+        T_LAYOUT(["tests/test_app_layout.py<br/>tabs, ways into the assistant, compact tiles"])
         T_CARD(["tests/test_model_card.py<br/>limits and safeguards the model card states"])
     end
 
@@ -118,6 +119,7 @@ flowchart TD
     EVAL -.-> AGENT
     T_ARCH -.-> AGENT
     T_README -.-> CLI
+    T_LAYOUT -.-> UI
     T_CARD -.-> AGENT
 
     classDef guard fill:#fde8e8,stroke:#b42318,stroke-width:2px
@@ -127,6 +129,6 @@ flowchart TD
     classDef core fill:#f1f1f1,stroke:#555
     class VAL,SCHEMA,CHECK guard
     class HUMAN,REVIEW human
-    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README,T_CARD test
+    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README,T_CARD,T_LAYOUT test
     class PETS,GUIDES,LIVE,LOG store
     class SCHED,ADD core

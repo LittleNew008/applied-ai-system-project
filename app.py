@@ -24,8 +24,22 @@ except ModuleNotFoundError as err:  # almost always: Streamlit was started with 
                 "```bash\nsource .venv/bin/activate\npip install -r requirements.txt\npython -m streamlit run app.py\n```")
     st.stop()
 
-st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
+st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 ai_assistant.load_env_file()  # the Gemini key and other settings from the git-ignored .env, if there is one
+
+# The page is a narrow, centred column (not the full width of a big screen); a few rules polish the pet tiles and the
+# assistant card. If a rule does not match in some Streamlit version the page still works, only a little plainer.
+PAGE_CSS = """<style>
+.stMainBlockContainer { max-width: 980px !important; padding-top: 2.5rem; }
+[class*='st-key-tile-selected'] { border: 2px solid #ff4b4b !important; border-radius: 0.6rem; }
+[class*='st-key-tile-'] h3 { font-size: 1.15rem; margin: 0; padding: 0.1rem 0 0; }
+.st-key-ai_callout { border-left: 5px solid #ff4b4b !important; }
+</style>"""
+
+TAB_PETS = "🐾 Pets & tasks"
+TAB_AI = "✨ AI Care Assistant"
+TAB_PLAN = "📅 Daily schedule"
+TAB_SETTINGS = "⚙️ Settings"
 
 SPECIES = ["dog", "cat", "other"]
 TILES_PER_ROW = 3
@@ -123,8 +137,19 @@ def select_pet(pet_id: str) -> None:
     st.session_state.selected_pet_id = pet_id
 
 
+def open_tab(name: str) -> None:
+    """Button callback: switch to the tab called `name` (the tabs keep their state in `st.session_state.main_tab`)."""
+    st.session_state.main_tab = name
+
+
+def suggest_for(pet_id: str) -> None:
+    """Button callback: select a pet and open the AI Care Assistant tab, ready to suggest tasks for it."""
+    select_pet(pet_id)
+    open_tab(TAB_AI)
+
+
 def pet_tile(owner: Owner, pet: Pet, is_selected: bool) -> None:
-    """One bordered tile: icon, name, details, task counts, and Select / Remove buttons."""
+    """One compact bordered tile: icon, name, details, task counts, and Select, Suggest and Remove buttons."""
     done = sum(1 for t in pet.tasks if t.is_completed())
     details = " · ".join(x for x in [pet.species, pet.breed, f"{pet.age} yr" if pet.age is not None else ""] if x)
     # The key lets the CSS below highlight the selected tile.
@@ -135,9 +160,12 @@ def pet_tile(owner: Owner, pet: Pet, is_selected: bool) -> None:
         st.button("✓ Selected" if is_selected else "Select", key=f"select_pet_{pet.id}",
                   type="primary" if is_selected else "secondary", disabled=is_selected,
                   on_click=select_pet, args=(pet.id,), width="stretch")
+        c_suggest, c_remove = st.columns(2)
+        c_suggest.button(f"{display.ASSISTANT_ICON} Suggest", key=f"suggest_pet_{pet.id}", on_click=suggest_for,
+                         args=(pet.id,), width="stretch", help=f"Ask the AI Care Assistant for tasks for {pet.name}")
         # on_click callbacks run before the next re-run, so the page redraws already updated.
-        st.button("Remove", key=f"remove_pet_{pet.id}", type="tertiary", on_click=owner.remove_pet,
-                  args=(pet.id,), width="stretch")
+        c_remove.button("Remove", key=f"remove_pet_{pet.id}", type="tertiary", on_click=owner.remove_pet,
+                        args=(pet.id,), width="stretch")
 
 
 def load_sample() -> None:
@@ -217,151 +245,65 @@ def dismiss_suggestions() -> None:
     st.session_state.pop("ai_result", None)
 
 
-def care_assistant_panel(owner: Owner, pet: Pet, today: date) -> None:
-    """Ask the Care Assistant for task ideas for `pet`, review them, and add the ones the user ticks.
-
-    The assistant only proposes; nothing reaches the pet's task list until "Add selected" is pressed.
-    """
-    config = ai_assistant.AssistantConfig.from_env()
-    with st.expander(f"{display.ASSISTANT_ICON} Care Assistant: suggest tasks"):
-        if config.offline:
-            st.caption(f"Offline mode ({config.offline_reason}): suggestions come from the built-in care guides, "
-                       "with no network use.")
-        else:
-            st.caption(f"Using Gemini ({config.model}). Pet details and task titles are sent to Google when you "
-                       "ask for suggestions.")
-        if st.button(f"Suggest tasks for {pet.name}", key="ai_suggest"):
-            try:
-                with st.spinner("Planning..."):
-                    st.session_state.ai_result = (pet.id, ai_assistant.propose_care_plan(owner, pet, today, config=config))
-            except ai_assistant.InvalidPetData as err:
-                st.session_state.pop("ai_result", None)
-                st.error("The assistant was not asked, because this pet's details need fixing: "
-                         + "; ".join(err.problems))
-
-        stored = st.session_state.get("ai_result")
-        if not stored or stored[0] != pet.id:
-            return
-        result = stored[1]
-        if result.fell_back:
-            st.warning(f"Gemini could not be used ({result.fallback_reason}), so these suggestions come from the "
-                       "built-in care guides.")
-        for need in result.needs:
-            st.markdown(f"- {need}")
-        if not result.accepted:
-            st.info(display.no_suggestions_text(result.retrieved, result.rejected))
-        report = result.report
-        if result.retrieved:
-            st.caption("Care guides used: " + "; ".join(f"{c.title} [{c.id}]" for c in result.retrieved))
-        picks = []
-        for i, p in enumerate(result.accepted):
-            checked = st.checkbox(
-                display.proposal_markdown(p),
-                value=not p.required and p.confidence >= ai_assistant.LOW_CONFIDENCE,
-                key=f"ai_pick_{result.trace_id}_{i}",
-                help="Required and low-confidence tasks start unticked: tick one only if it is right for this pet.")
-            st.caption(display.proposal_detail(p, result.retrieved, report))
-            for problem in display.proposal_problems(p, report):
-                st.warning(problem)
-            if checked:
-                picks.append(p.title)
-        for problem in display.general_problems(report):
-            st.warning(problem)
-        if result.rejected:
-            with st.expander(f"{len(result.rejected)} suggestion(s) left out"):
-                for r in result.rejected:
-                    st.caption(r.reason)
-        c_add, c_dismiss = st.columns(2)
-        add = c_add.button("Add selected", key="ai_add", disabled=not picks, type="primary")
-        c_dismiss.button("Dismiss", key="ai_dismiss", on_click=dismiss_suggestions)
-        with st.expander("Agent log for this run (plan, retrieved guides, raw reply, validation)"):
-            st.code(ai_assistant.format_trace(ai_assistant.read_trace(config.trace_path, result.trace_id)),
-                    language=None)
-            st.caption(f"Full log: {config.trace_path.name} (run id {result.trace_id}).")
-        if add:
-            created = ai_assistant.commit(owner, pet, result, picks, today)
-            st.session_state.pop("ai_result", None)
-            rerun_after(f"Added {len(created)} suggested task(s) for {pet.name}.")
+def choose_pet() -> None:
+    """Radio callback in the assistant tab: the pet picked there becomes the selected pet everywhere."""
+    select_pet(st.session_state.ai_pet_choice)
 
 
-owner = get_owner()
-today = date.today()
+def assistant_callout(pet: Pet) -> None:
+    """A card at the top of the first tab that points to the AI Care Assistant, so it is hard to miss."""
+    with st.container(border=True, key="ai_callout"):
+        text_col, button_col = st.columns([3, 1], vertical_alignment="center")
+        text_col.markdown(f"**{display.ASSISTANT_ICON} Not sure what to add for {pet.name}?** The AI Care Assistant "
+                          "suggests tasks, shows the care guide behind each one, and lets you choose what to keep.")
+        button_col.button("Try it", key="open_assistant", type="primary", on_click=open_tab, args=(TAB_AI,),
+                          width="stretch")
 
-st.title("🐾 PawPal+")
-st.caption("Add your pets and their care tasks, then generate a plan for the day.")
 
-if "load_problem" in st.session_state:
-    st.error(st.session_state.pop("load_problem"))
-if "flash" in st.session_state:
-    st.success(st.session_state.pop("flash"))
+# ---------------------------------------------------------------- tab 1: pets and tasks
+def pets_tab(owner: Owner, current_pet: Pet | None, today: date) -> None:
+    """Add pets, pick one, add and manage its tasks."""
+    if not owner.pets:
+        st.info("No pets yet. Add one below, or try the app with ready-made sample data.")
+        st.button("Load sample data", key="load_sample", on_click=load_sample)
+    else:
+        assistant_callout(current_pet)
 
-# ---------------------------------------------------------------- owner
-with st.expander("Owner and availability", expanded=not owner.pets):
-    with st.form("owner_form"):
-        owner_name = st.text_input("Owner name", value=owner.name, key="owner_name")
-        col_start, col_end = st.columns(2)
-        day_start = col_start.time_input("Day starts", value=owner.day_start, key="day_start")
-        day_end = col_end.time_input("Day ends", value=owner.day_end, key="day_end")
-        limit = st.number_input(
-            "Max care minutes per day (0 = no limit)", min_value=0, max_value=1440,
-            value=owner.available_minutes or 0, key="limit",
-            help="Caps the total minutes the plan schedules each day. Lower-priority tasks that do not fit are skipped.",
-        )
-        saved = st.form_submit_button("Save availability")
-    if saved:
+    st.subheader("Pets")
+    with st.expander("➕ Add a pet", expanded=not owner.pets):
+        with st.form("add_pet_form", clear_on_submit=True):
+            c_name, c_species, c_breed, c_age = st.columns([3, 2, 3, 2])
+            pet_name = c_name.text_input("Pet name", key="pet_name")
+            species = c_species.selectbox("Species", SPECIES, key="pet_species")
+            breed = c_breed.text_input("Breed (optional)", key="pet_breed")
+            age = c_age.number_input("Age (years)", min_value=0, max_value=40, value=1, key="pet_age")
+            add_pet = st.form_submit_button("Add pet")
+    if add_pet:
         try:
-            if not owner_name.strip():
-                raise ValueError("owner name must not be empty")
-            owner.set_availability(day_start, day_end, int(limit) or None)
-            owner.name = owner_name.strip()
+            clean_name = pet_name.strip()
+            if any(p.name.lower() == clean_name.lower() for p in owner.pets):
+                raise ValueError(f"you already have a pet named {clean_name!r}")
+            new_pet = Pet(clean_name, species, breed=breed.strip(), age=int(age))
+            owner.add_pet(new_pet)
         except ValueError as err:
             st.error(str(err))
         else:
-            rerun_after("Availability saved.")
+            select_pet(new_pet.id)  # so its tasks can be added straight away
+            rerun_after(f"Added {clean_name}.")
 
-# ---------------------------------------------------------------- pets
-st.subheader("Pets")
-with st.form("add_pet_form", clear_on_submit=True):
-    c_name, c_species, c_breed, c_age = st.columns([3, 2, 3, 2])
-    pet_name = c_name.text_input("Pet name", key="pet_name")
-    species = c_species.selectbox("Species", SPECIES, key="pet_species")
-    breed = c_breed.text_input("Breed (optional)", key="pet_breed")
-    age = c_age.number_input("Age (years)", min_value=0, max_value=40, value=1, key="pet_age")
-    add_pet = st.form_submit_button("Add pet")
-if add_pet:
-    try:
-        clean_name = pet_name.strip()
-        if any(p.name.lower() == clean_name.lower() for p in owner.pets):
-            raise ValueError(f"you already have a pet named {clean_name!r}")
-        new_pet = Pet(clean_name, species, breed=breed.strip(), age=int(age))
-        owner.add_pet(new_pet)
-    except ValueError as err:
-        st.error(str(err))
-    else:
-        select_pet(new_pet.id)  # so its tasks can be added straight away
-        rerun_after(f"Added {clean_name}.")
+    if owner.pets:
+        st.caption("Select a pet's tile to add tasks for it.")
+    for row_start in range(0, len(owner.pets), TILES_PER_ROW):
+        for column, pet in zip(st.columns(TILES_PER_ROW), owner.pets[row_start:row_start + TILES_PER_ROW]):
+            with column:
+                pet_tile(owner, pet, is_selected=current_pet is not None and pet.id == current_pet.id)
 
-# Highlight the selected tile (containers get a CSS class from their key).
-st.markdown(
-    "<style>[class*='st-key-tile-selected'] {border: 2px solid #ff4b4b !important; border-radius: 0.6rem;}</style>",
-    unsafe_allow_html=True,
-)
-current_pet = selected_pet(owner)
-if not owner.pets:
-    st.info("No pets yet. Add one above, or try the app with ready-made sample data.")
-    st.button("Load sample data", key="load_sample", on_click=load_sample)
-else:
-    st.caption("Select a pet's tile to add tasks for it.")
-for row_start in range(0, len(owner.pets), TILES_PER_ROW):
-    for column, pet in zip(st.columns(TILES_PER_ROW), owner.pets[row_start:row_start + TILES_PER_ROW]):
-        with column:
-            pet_tile(owner, pet, is_selected=current_pet is not None and pet.id == current_pet.id)
+    st.subheader("Tasks")
+    if not owner.pets:
+        st.info("Add a pet first, then you can give it tasks.")
+        return
+    assert current_pet is not None  # there is at least one pet past this point
 
-# ---------------------------------------------------------------- tasks
-st.subheader("Tasks")
-if not owner.pets:
-    st.info("Add a pet first, then you can give it tasks.")
-else:
     # Adding tasks is never blocked (the cap limits what gets scheduled, not what you
     # may record), so say so up front when today's tasks will not all fit.
     scheduler = Scheduler(owner)
@@ -370,7 +312,7 @@ else:
     if due_minutes > capacity:
         st.warning(
             f"Today's tasks add up to {due_minutes} min, but only {capacity} min are available "
-            f"(see Owner and availability). The plan will skip the lowest-priority tasks that do not fit, "
+            f"(change this in the Settings tab). The plan will skip the lowest-priority tasks that do not fit, "
             f"and flag any required task that cannot be scheduled."
         )
     elif due_minutes:
@@ -382,36 +324,27 @@ else:
         st.caption("You cannot do two things at once, so the schedule keeps the more important task and lists the "
                    "other as not scheduled. Edit one task's time below to keep both.")
 
-    with st.expander(f"{display.SLOT_ICON} Find a free slot"):
-        c_len, c_after = st.columns(2)
-        slot_minutes = int(c_len.number_input("Length (minutes)", min_value=1, max_value=240, value=20, key="slot_minutes"))
-        slot_after = c_after.time_input("Not before", value=owner.day_start, key="slot_after")
-        slot = scheduler.next_available_slot(today, slot_minutes, not_before=slot_after)
-        if slot is None:
-            st.info("No free slot of that length is left today. Check the day's hours and the daily limit.")
-        else:
-            st.success(f"Next free {slot_minutes}-minute slot today: **{slot[0]:%H:%M}–{slot[1]:%H:%M}**")
-
-    assert current_pet is not None  # there is at least one pet in this branch
-    st.markdown(f"Adding a task for **{current_pet.name}** (select another pet's tile above to change this).")
-    with st.form("add_task_form", clear_on_submit=True):
-        title = st.text_input("Task title", value="Morning walk", key="task_title")
-        description = st.text_input("Description (optional)", key="task_description")
-        c1, c2, c3 = st.columns(3)
-        duration = c1.number_input("Duration (minutes)", min_value=1, max_value=240, value=20, key="task_duration")
-        priority = c2.selectbox(
-            "Priority", list(Priority), index=list(Priority).index(Priority.MEDIUM),
-            format_func=display.priority_badge, key="task_priority",
-        )
-        category = c3.selectbox("Category", list(Category), key="task_category",
-                                format_func=lambda c: f"{display.category_icon(c)} {c.value.title()}")
-        c4, c5, c6 = st.columns(3)
-        recurrence = c4.selectbox("Repeats", list(Recurrence), format_func=lambda r: r.value.title(), key="task_repeat")
-        start_date = c5.date_input("Starts on", value=today, key="task_start")
-        required = c6.checkbox("Required (e.g. medication)", key="task_required")
-        timing = st.radio("When", TIMING_MODES, horizontal=True, key="task_timing")
-        when = st.time_input("Time (used for Preferred / Fixed)", value=time(8, 0), key="task_time")
-        add_task = st.form_submit_button("Add task")
+    # Open while the pet has no tasks (the obvious next step), then tucked away to keep the page short.
+    with st.expander(f"➕ Add a task for {current_pet.name}", expanded=not current_pet.tasks):
+        st.markdown(f"Adding a task for **{current_pet.name}** (select another pet's tile above to change this).")
+        with st.form("add_task_form", clear_on_submit=True):
+            title = st.text_input("Task title", value="Morning walk", key="task_title")
+            description = st.text_input("Description (optional)", key="task_description")
+            c1, c2, c3 = st.columns(3)
+            duration = c1.number_input("Duration (minutes)", min_value=1, max_value=240, value=20, key="task_duration")
+            priority = c2.selectbox(
+                "Priority", list(Priority), index=list(Priority).index(Priority.MEDIUM),
+                format_func=display.priority_badge, key="task_priority",
+            )
+            category = c3.selectbox("Category", list(Category), key="task_category",
+                                    format_func=lambda c: f"{display.category_icon(c)} {c.value.title()}")
+            c4, c5, c6 = st.columns(3)
+            recurrence = c4.selectbox("Repeats", list(Recurrence), format_func=lambda r: r.value.title(), key="task_repeat")
+            start_date = c5.date_input("Starts on", value=today, key="task_start")
+            required = c6.checkbox("Required (e.g. medication)", key="task_required")
+            timing = st.radio("When", TIMING_MODES, horizontal=True, key="task_timing")
+            when = st.time_input("Time (used for Preferred / Fixed)", value=time(8, 0), key="task_time")
+            add_task = st.form_submit_button("Add task")
     if add_task:
         try:
             current_pet.add_task(Task(
@@ -431,7 +364,15 @@ else:
         else:
             rerun_after(f"Added '{title.strip()}'.")
 
-    care_assistant_panel(owner, current_pet, today)
+    with st.expander(f"{display.SLOT_ICON} Find a free slot"):
+        c_len, c_after = st.columns(2)
+        slot_minutes = int(c_len.number_input("Length (minutes)", min_value=1, max_value=240, value=20, key="slot_minutes"))
+        slot_after = c_after.time_input("Not before", value=owner.day_start, key="slot_after")
+        slot = scheduler.next_available_slot(today, slot_minutes, not_before=slot_after)
+        if slot is None:
+            st.info("No free slot of that length is left today. Check the day's hours and the daily limit.")
+        else:
+            st.success(f"Next free {slot_minutes}-minute slot today: **{slot[0]:%H:%M}–{slot[1]:%H:%M}**")
 
     st.markdown("**Task list**")
     f_scope, f_status = st.columns(2)
@@ -474,27 +415,188 @@ else:
                 else:
                     rerun_after(f"Updated '{new_title.strip()}'.")
 
-# ---------------------------------------------------------------- schedule
-st.divider()
-st.subheader("Daily schedule")
-plan_date = st.date_input("Plan for", value=today, key="plan_date")
-if st.button("Generate schedule", key="generate"):
-    st.session_state.show_plan = True
 
-if st.session_state.get("show_plan"):
-    # The plan is rebuilt from the live Owner on every run, so it never goes stale.
-    plan = Scheduler(owner).generate_plan(plan_date)
-    st.markdown(f"**Schedule for {plan_date:%A, %B %d}**")
-    if not plan.scheduled_items and not plan.skipped_tasks:
-        st.info("Nothing is due on this date. Add tasks above, or pick another date.")
+# ---------------------------------------------------------------- tab 2: the AI Care Assistant
+def ai_tab(owner: Owner, current_pet: Pet | None, today: date) -> None:
+    """Ask the Care Assistant for task ideas for a pet, review them, and add the ones the user ticks.
+
+    The assistant only proposes; nothing reaches the pet's task list until "Add selected" is pressed.
+    """
+    config = ai_assistant.AssistantConfig.from_env()
+    st.subheader(f"{display.ASSISTANT_ICON} AI Care Assistant")
+    st.write("Not sure what care a pet is missing? The assistant looks at the tasks a pet already has and suggests "
+             "ones it lacks. Every suggestion shows the care guide it comes from and how confident the assistant is. "
+             "**Nothing is added until you tick it and press Add.**")
+    if config.offline:
+        st.caption(f"Offline mode ({config.offline_reason}): suggestions come from the built-in care guides, "
+                   "with no network use.")
     else:
-        show_plan(plan, owner)
+        st.caption(f"Using Gemini ({config.model}). Pet details and task titles are sent to Google when you "
+                   "ask for suggestions.")
 
-# ---------------------------------------------------------------- saved data
-st.divider()
-with st.expander(f"{display.SAVED_ICON} Saved data"):
+    if current_pet is None:
+        st.info("No pets yet. Add one in the Pets & tasks tab, or try the app with ready-made sample data.")
+        st.button("Load sample data", key="load_sample_ai", on_click=load_sample)
+        return
+    pet = current_pet
+
+    if len(owner.pets) > 1:
+        by_id = {p.id: p for p in owner.pets}
+        st.session_state.ai_pet_choice = pet.id  # keep this chooser in step with the selected tile
+        st.radio("Suggest tasks for", list(by_id), key="ai_pet_choice", horizontal=True,
+                 format_func=lambda pid: display.pet_label(by_id[pid]), on_change=choose_pet)
+    else:
+        st.write(f"Suggesting for **{display.pet_label(pet)}**.")
+
+    if st.button(f"{display.ASSISTANT_ICON} Suggest tasks for {pet.name}", key="ai_suggest", type="primary",
+                 width="stretch"):
+        try:
+            with st.spinner("Looking at what the pet already has and finding guides..."):
+                st.session_state.ai_result = (pet.id, ai_assistant.propose_care_plan(owner, pet, today, config=config))
+        except ai_assistant.InvalidPetData as err:
+            st.session_state.pop("ai_result", None)
+            st.error("The assistant was not asked, because this pet's details need fixing: "
+                     + "; ".join(err.problems))
+
+    stored = st.session_state.get("ai_result")
+    if not stored or stored[0] != pet.id:
+        with st.expander("How it works"):
+            st.markdown(
+                "1. It checks which kinds of care the pet has no task for (walks, feeding, play, grooming, medication).\n"
+                "2. It finds matching care guides in a small built-in library.\n"
+                "3. It proposes tasks, each citing a guide, and checks them against your schedule.\n"
+                "4. You review the suggestions and add only the ones you want. Required tasks and low-confidence "
+                "ones start unticked.")
+        return
+
+    result = stored[1]
+    st.divider()
+    st.markdown(f"**Suggestions for {pet.name}**")
+    if result.fell_back:
+        st.warning(f"Gemini could not be used ({result.fallback_reason}), so these suggestions come from the "
+                   "built-in care guides.")
+    with st.container(border=True):
+        for need in result.needs:
+            st.markdown(f"- {need}")
+        if result.retrieved:
+            st.caption("Care guides used: " + "; ".join(f"{c.title} [{c.id}]" for c in result.retrieved))
+    if not result.accepted:
+        st.info(display.no_suggestions_text(result.retrieved, result.rejected))
+    report = result.report
+    picks = []
+    for i, p in enumerate(result.accepted):
+        with st.container(border=True):
+            checked = st.checkbox(
+                display.proposal_markdown(p),
+                value=not p.required and p.confidence >= ai_assistant.LOW_CONFIDENCE,
+                key=f"ai_pick_{result.trace_id}_{i}",
+                help="Required and low-confidence tasks start unticked: tick one only if it is right for this pet.")
+            st.caption(display.proposal_detail(p, result.retrieved, report))
+            for problem in display.proposal_problems(p, report):
+                st.warning(problem)
+        if checked:
+            picks.append(p.title)
+    for problem in display.general_problems(report):
+        st.warning(problem)
+    if result.rejected:
+        with st.expander(f"{len(result.rejected)} suggestion(s) left out"):
+            for r in result.rejected:
+                st.caption(r.reason)
+    if result.accepted:
+        c_add, c_dismiss, c_count = st.columns([2, 2, 3], vertical_alignment="center")
+        add = c_add.button("Add selected", key="ai_add", disabled=not picks, type="primary", width="stretch")
+        c_dismiss.button("Dismiss", key="ai_dismiss", on_click=dismiss_suggestions, width="stretch")
+        c_count.caption(f"{len(picks)} of {len(result.accepted)} selected")
+    else:
+        add = False
+        st.button("Dismiss", key="ai_dismiss", on_click=dismiss_suggestions)
+    with st.expander("Agent log for this run (plan, retrieved guides, raw reply, validation)"):
+        st.code(ai_assistant.format_trace(ai_assistant.read_trace(config.trace_path, result.trace_id)),
+                language=None)
+        st.caption(f"Full log: {config.trace_path.name} (run id {result.trace_id}).")
+    if add:
+        created = ai_assistant.commit(owner, pet, result, picks, today)
+        st.session_state.pop("ai_result", None)
+        rerun_after(f"Added {len(created)} suggested task(s) for {pet.name}.")
+
+
+# ---------------------------------------------------------------- tab 3: the daily schedule
+def schedule_tab(owner: Owner, today: date) -> None:
+    """Pick a day and show the plan for it."""
+    st.subheader("Daily schedule")
+    plan_date = st.date_input("Plan for", value=today, key="plan_date")
+    if st.button("Generate schedule", key="generate", type="primary"):
+        st.session_state.show_plan = True
+
+    if st.session_state.get("show_plan"):
+        # The plan is rebuilt from the live Owner on every run, so it never goes stale.
+        plan = Scheduler(owner).generate_plan(plan_date)
+        st.markdown(f"**Schedule for {plan_date:%A, %B %d}**")
+        if not plan.scheduled_items and not plan.skipped_tasks:
+            st.info("Nothing is due on this date. Add tasks in the Pets & tasks tab, or pick another date.")
+        else:
+            show_plan(plan, owner)
+    else:
+        st.caption("Press Generate schedule to turn every pet's open tasks into one plan for the day.")
+
+
+# ---------------------------------------------------------------- tab 4: settings and saved data
+def settings_tab(owner: Owner) -> None:
+    """The owner's name and day, and the saved data."""
+    st.subheader("Your day")
+    with st.form("owner_form"):
+        owner_name = st.text_input("Owner name", value=owner.name, key="owner_name")
+        col_start, col_end = st.columns(2)
+        day_start = col_start.time_input("Day starts", value=owner.day_start, key="day_start")
+        day_end = col_end.time_input("Day ends", value=owner.day_end, key="day_end")
+        limit = st.number_input(
+            "Max care minutes per day (0 = no limit)", min_value=0, max_value=1440,
+            value=owner.available_minutes or 0, key="limit",
+            help="Caps the total minutes the plan schedules each day. Lower-priority tasks that do not fit are skipped.",
+        )
+        saved = st.form_submit_button("Save availability")
+    if saved:
+        try:
+            if not owner_name.strip():
+                raise ValueError("owner name must not be empty")
+            owner.set_availability(day_start, day_end, int(limit) or None)
+            owner.name = owner_name.strip()
+        except ValueError as err:
+            st.error(str(err))
+        else:
+            rerun_after("Availability saved.")
+
+    st.subheader(f"{display.SAVED_ICON} Saved data")
     st.caption(f"Pets and tasks are saved automatically to `{data_file().name}` and loaded the next time you open the app.")
     confirm = st.checkbox("I understand this deletes every pet and task", key="confirm_clear")
     st.button("Clear all data", key="clear_all", disabled=not confirm, on_click=clear_all)
+
+
+# ---------------------------------------------------------------- the page
+owner = get_owner()
+today = date.today()
+current_pet = selected_pet(owner)
+
+st.html(PAGE_CSS)
+st.title("🐾 PawPal+")
+st.caption("Plan a day of care for your pets, with an AI assistant that suggests tasks you may be missing.")
+
+if "load_problem" in st.session_state:
+    st.error(st.session_state.pop("load_problem"))
+if "flash" in st.session_state:
+    st.success(st.session_state.pop("flash"))
+
+# The tab in view is kept in st.session_state.main_tab, so buttons can open a tab (see open_tab) and the page stays on
+# the tab you were using after an action.
+tab_pets, tab_ai, tab_plan, tab_settings = st.tabs([TAB_PETS, TAB_AI, TAB_PLAN, TAB_SETTINGS],
+                                                   key="main_tab", on_change="rerun")
+with tab_pets:
+    pets_tab(owner, current_pet, today)
+with tab_ai:
+    ai_tab(owner, current_pet, today)
+with tab_plan:
+    schedule_tab(owner, today)
+with tab_settings:
+    settings_tab(owner)
 
 autosave(owner)  # last, so a change made anywhere above is saved before the run ends
