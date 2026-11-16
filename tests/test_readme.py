@@ -280,3 +280,33 @@ def test_the_evidence_checker_flags_a_failing_run_a_network_call_or_a_wrong_coun
     monkeypatch.setattr(sync_readme, "EVIDENCE", tmp_path / "e")
     problems = sync_readme.evidence_problems()
     assert problems and any(fragment in p for p in problems), problems
+
+
+# ------------------------------------------------------------------ the screenshot of the assistant tab
+
+def test_the_readme_shows_a_real_screenshot_of_the_ai_assistant_tab(text):
+    import struct
+
+    body = section(split_reference(text)[0], 5)
+    assert "![The AI Care Assistant tab" in body and "(screenshots/ui_ai_assistant.png)" in body
+    image = (ROOT / "screenshots" / "ui_ai_assistant.png").read_bytes()
+    assert image[:8] == b"\x89PNG\r\n\x1a\n"  # a real PNG, not a placeholder
+    width, height = struct.unpack(">II", image[16:24])
+    assert width >= 800 and height >= 800 and len(image) > 50_000
+    assert text.index("### In the app") < text.index("### Sample 1")  # shown before the command-line samples
+
+
+def test_every_screenshot_in_the_readme_exists_is_a_real_wide_png_and_none_is_called_outdated(text):
+    import struct
+
+    shown = re.findall(r"!\[[^\]]*\]\((screenshots/[\w.\-]+\.png)\)", text)
+    assert len(shown) >= 7 and len(set(shown)) == len(shown)  # the assistant shots plus the four original views
+    for path in shown:
+        image = (ROOT / path).read_bytes()
+        assert image[:8] == b"\x89PNG\r\n\x1a\n", path
+        width, height = struct.unpack(">II", image[16:24])
+        assert width >= 1000 and height >= 200, f"{path} is {width}x{height}"
+    assert not re.search(r"predate|before the app was reorgani[sz]ed|taken before", text, re.I)
+    assert {"ui_pets_and_conflicts", "ui_free_slot", "ui_task_list", "ui_schedule", "ui_ai_assistant",
+            "ui_ai_assistant_start", "ui_ai_assistant_offline"} <= {Path(p).stem for p in shown}
+    assert "take_screenshots.py" in text and (ROOT / "scripts" / "take_screenshots.py").is_file()

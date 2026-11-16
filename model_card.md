@@ -15,7 +15,7 @@ The Care Assistant suggests care tasks for a pet in the PawPal+ app. This card s
 | **Unchanged** | The scheduler: `pawpal_system.py` has no changes since commit `e25ce27`, the last commit before this work. |
 
 <!-- BEGIN generated:test-total -->
-**687 automated tests** (the original 314 unchanged), all offline, and **8 of 8** evaluation scenarios passing offline ([evaluation_log.txt](evaluation_log.txt)).
+**689 automated tests** (the original 314 unchanged), all offline, and **8 of 8** evaluation scenarios passing offline ([evaluation_log.txt](evaluation_log.txt)).
 <!-- END generated:test-total -->
 
 ## 1. System limitations and biases

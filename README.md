@@ -208,6 +208,18 @@ New to the app? Press **Load sample data** for two pets and eight tasks (includi
 
 These are real runs. The blocks below are copied from the files in [evidence/](evidence/) by `scripts/sync_readme.py`, so they are exactly what the program printed. The two offline ones are deterministic, and `tests/test_readme.py` compares them with a fresh run.
 
+### In the app
+
+![The AI Care Assistant tab, showing suggestions for Mochi](screenshots/ui_ai_assistant.png)
+
+A screenshot of the running app on the **✨ AI Care Assistant** tab (the second of four tabs), after pressing **Suggest tasks for Mochi**. The line under the explanation shows this was a live Gemini run, so what it suggests varies. From top to bottom: the pet chooser and the main button; the needs the assistant noticed and the care guides it used; one suggestion in its own card, ticked, with its confidence and how that was made up, the guide it cites and what the trial schedule did with it; then **Add selected**, **Dismiss** and the count of ticked suggestions; and the collapsed agent log for the run. The same tab with no key (offline mode, `OFFLINE_MODE=1`), for the demo dog Biscuit: first as it opens, with the explainer and the pet chooser, and then after pressing **Suggest tasks for Biscuit**. Both offline suggestions are ticked, and **Add selected** adds only the ticked ones. The three samples after these pictures show the same flow on the command line.
+
+![The AI Care Assistant tab as it opens](screenshots/ui_ai_assistant_start.png)
+
+![The AI Care Assistant tab with two offline suggestions for Biscuit](screenshots/ui_ai_assistant_offline.png)
+
+Except for the live Gemini one, these screenshots are made by `python scripts/take_screenshots.py`, which starts its own throwaway copy of the app (temporary data, offline mode, localhost only) and drives it with a headless browser; it needs `pip install playwright` and `playwright install chromium`, which are not project requirements.
+
 ### Sample 1: suggestions, a choice, and the new schedule (offline)
 
 Biscuit the demo dog has walks, feeding, play and medication, but nothing for grooming. The assistant proposes two grooming tasks, grounded in the dog-grooming guide, both high confidence. The answer `1` is piped in at the "Add which?" prompt, so only "Brush coat" is added, and the daily schedule is regenerated with it.
@@ -348,7 +360,7 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 ## 7. Testing summary
 
 <!-- BEGIN generated:tests-per-file -->
-**687 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
+**689 tests, all passing offline.** The original 314 tests are unchanged and still pass; the rest are for the Care Assistant. Run them with `python -m pytest -q`.
 
 | Test file | Tests | What it checks |
 |---|---:|---|
@@ -369,9 +381,9 @@ $ OFFLINE_MODE=1 python main.py assist --data evidence/bad_pet_data.json --accep
 | `tests/test_guardrails.py` | 47 | schema validation and repair, input validation, confidence scores, offline switch, step log |
 | `tests/test_main_assistant.py` | 37 | the Care Assistant on the command line |
 | `tests/test_model_card.py` | 28 | model_card.md: its tables, numbers and every limitation it states, against the code and evidence |
-| `tests/test_readme.py` | 23 | this README against the files and runs it quotes |
+| `tests/test_readme.py` | 25 | this README against the files and runs it quotes |
 | `tests/test_retriever.py` | 26 | the retriever: scoring, top-k, species and life-stage filters, pet and query search |
-| **Total** | **687** | |
+| **Total** | **689** | |
 <!-- END generated:tests-per-file -->
 
 - **Offline and keyless.** `tests/conftest.py` forces offline mode, removes any `GEMINI_API_KEY` and never reads the real `.env`. As an independent check, `scripts/block_network.py` refuses and counts every outbound connection: the full suite passes with a fake key set and **0 network attempts**.
@@ -785,7 +797,7 @@ tests/test_uml.py ...............                                        [100%]
 
 Why it is high: every one of the 314 tests passes; each core behavior is checked on its happy path and its edges (including saving and loading, where every kind of damaged file is rejected without losing the good one); random inputs check the rules that must always hold; and the edge-case round found and fixed a real bug (tasks at the same time and priority were ordered with every capital letter before every lowercase one, so `Cherry` came before `banana`).
 
-Why it is not 5: the tests were written by the same AI assistant that wrote the code, so they can share its blind spots (injecting deliberate bugs reduces this but does not remove it); the UI is tested headlessly (the screenshots below predate the redesign into tabs) and has had only hand checks in a browser; the data file is single-user and local; the planner is greedy by design, so tests prove its plans are valid, not that they are the best possible; and overnight days, time zones and seconds in times are not supported (seconds are truncated, and a test documents that). Line coverage was measured once, after the Care Assistant was added: `pawpal_system.py` 99%, `display.py` 100%, `main.py` 98%, `app.py` 98%.
+Why it is not 5: the tests were written by the same AI assistant that wrote the code, so they can share its blind spots (injecting deliberate bugs reduces this but does not remove it); the UI is tested headlessly (the screenshots below are of the tabbed layout) and has had only hand checks in a browser; the data file is single-user and local; the planner is greedy by design, so tests prove its plans are valid, not that they are the best possible; and overnight days, time zones and seconds in times are not supported (seconds are truncated, and a test documents that). Line coverage was measured once, after the Care Assistant was added: `pawpal_system.py` 99%, `display.py` 100%, `main.py` 98%, `app.py` 98%.
 
 ## 📸 Demo Walkthrough
 
@@ -823,17 +835,17 @@ Why it is not 5: the tests were written by the same AI assistant that wrote the 
 
 ### Screenshots
 
-*These four screenshots were taken before the app was reorganised into tabs and a narrower column, so the page around each one now looks different; the features they show are unchanged.*
+*These screenshots show the current tabbed layout. They were taken from the running app in offline mode with the demo data, by `scripts/take_screenshots.py`, in a window 1100 px wide. The AI Care Assistant tab is shown in section 5.*
 
-Pets as tiles, with the conflict warning that appears when two fixed-time tasks overlap:
+The first tab: the card that opens the AI Care Assistant, the pets as compact tiles (Select, ✨ Suggest, Remove), and the conflict warning that appears when two fixed-time tasks overlap:
 
 ![Pet tiles and the conflict warning](screenshots/ui_pets_and_conflicts.png)
 
-The "Find a free slot" panel:
+The "Find a free slot" panel, opened:
 
 ![Find a free slot](screenshots/ui_free_slot.png)
 
-The task list, sorted by time, with emoji, color-coded priority and status, and a red REQUIRED tag:
+The task list (the first five tasks), sorted by time, with emoji, color-coded priority and status, a red REQUIRED tag, and Done, Remove and Edit on each task:
 
 ![The sorted task list](screenshots/ui_task_list.png)
 
@@ -988,13 +1000,15 @@ knowledge/            the Care Assistant's local knowledge base (markdown care g
 tests/                the pytest suite, one file per area (see the testing summary above)
 scripts/              make_evidence.sh (re-run the cited commands), sync_readme.py (fill the generated blocks of this README
                       and of model_card.md), block_network.py (pytest plugin that proves a run makes no network calls),
-                      make_agent_traces.py (records real agent traces for ai_interactions.md), rag_comparison.py and
-                      probe_injection.py (live Gemini experiments; they need a key)
+                      make_agent_traces.py (records real agent traces for ai_interactions.md), take_screenshots.py (the
+                      UI screenshots, from a throwaway offline copy of the app), rag_comparison.py and probe_injection.py
+                      (live Gemini experiments; they need a key)
 evidence/             recorded command outputs cited in this README (and bad_pet_data.json for sample 3), the agent traces,
                       and the live rag_comparison.txt, injection_probe.txt and dated cat sample cited by the model card
 diagrams/             uml_final.mmd (Mermaid source), uml_final.png (rendering), uml.mmd (identical older copy),
                       architecture.mmd (the Care Assistant's data flow, guardrails and where tests and people check it)
-screenshots/          the UI screenshots shown above
+screenshots/          the UI screenshots shown above (ui_ai_assistant.png is a live Gemini run; the rest come from
+                      scripts/take_screenshots.py)
 data.json             your saved pets and tasks (created by the app; not in git)
 requirements.txt      streamlit, pytest, tabulate, wcwidth, google-genai, jsonschema
 .env                  your Gemini key and settings (git-ignored; never committed)
