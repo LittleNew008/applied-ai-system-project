@@ -215,7 +215,7 @@ Biscuit the demo dog has walks, feeding, play and medication, but nothing for gr
 <!-- BEGIN generated:sample-offline -->
 ```console
 $ printf '1\n' | OFFLINE_MODE=1 python main.py assist --pet biscuit
-✨ Care Assistant for 🐶 Biscuit - Sunday, November 15, 2026
+✨ Care Assistant for 🐶 Biscuit - Monday, November 16, 2026
 Mode: offline (OFFLINE_MODE is set); suggestions come from the built-in care guides.
 ========================================================================
 Needs:
@@ -237,7 +237,7 @@ Care guides used:
 ========================================================================
 Add which? numbers like 1,3 | all | none | Enter = 1, 2: ✅ Added 1 task(s) to Biscuit: Brush coat
 
-🐾 Today's Schedule - Sunday, November 15, 2026
+🐾 Today's Schedule - Monday, November 16, 2026
 Owner: Jordan | Pets: 🐶 Biscuit, 🐱 Mochi
 Available: 07:00-20:00
 ========================================================================
@@ -273,7 +273,7 @@ Not scheduled:
 🚧 Vet check-in call (Mochi): Skipped (medium priority): fixed time 12:00-12:15 clashes with 'Lunch feeding' (Biscuit) at 12:00-12:10
 ========================================================================
 8 scheduled (120 min), 1 skipped
-(Full step log of this run: ai_trace.jsonl, run id 92340c119ca9.)
+(Full step log of this run: ai_trace.jsonl, run id f4a10a4129fc.)
 ```
 <!-- END generated:sample-offline -->
 
@@ -284,32 +284,32 @@ A live call for Mochi the demo cat, with `--accept none` so nothing is added. Th
 <!-- BEGIN generated:sample-gemini -->
 ```console
 $ python main.py assist --pet mochi --accept none
-✨ Care Assistant for 🐱 Mochi - Sunday, November 15, 2026
+✨ Care Assistant for 🐱 Mochi - Monday, November 16, 2026
 Mode: Gemini (gemini-3.1-flash-lite); the pet's details and task titles were sent to Google.
 ========================================================================
 Needs:
   - Establish a consistent daily feeding schedule
   - Monitor daily water intake
-  - Provide dental hygiene care
-  - Schedule regular litter box cleaning
+  - Provide interactive puzzle feeders for mental stimulation
+  - Schedule regular dental hygiene checks
   - Monitor weight and body condition
 Care guides used:
-  - Grooming and litter care for cats [cat-grooming]
   - Feeding routine for cats [cat-feeding]
+  - Grooming and litter care for cats [cat-grooming]
   - Play and enrichment for cats [cat-play]
 
-╭─────┬─────────────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────────╮
-│ #   │ Task                        │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                            │
-├─────┼─────────────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────────┤
-│ 1   │ 🍖 Morning feeding          │     5 │ 🔴 High    │ prefers 07:30 │ 🔁 daily  │ 🟢 100%      │ ✅ at 07:30 │ Feeding routine for cats [cat-     │
-│     │                             │       │            │               │           │              │             │ feeding]                           │
-│ 2   │ 🍖 Evening feeding          │     5 │ 🔴 High    │ prefers 18:00 │ 🔁 daily  │ 🟢 100%      │ ✅ at 18:00 │ Feeding routine for cats [cat-     │
-│     │                             │       │            │               │           │              │             │ feeding]                           │
-│ 3   │ 📌 Scoop litter box         │     5 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:35 │ Grooming and litter care for cats  │
-│     │                             │       │            │               │           │              │             │ [cat-grooming]                     │
-│ 4   │ 🎾 Interactive play session │    15 │ 🟡 Medium  │ prefers 19:00 │ 🔁 daily  │ 🟢 90%       │ ✅ at 19:00 │ Play and enrichment for cats [cat- │
-│     │                             │       │            │               │           │              │             │ play]                              │
-╰─────┴─────────────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────────╯
+╭─────┬──────────────────────────┬───────┬────────────┬───────────────┬───────────┬──────────────┬─────────────┬────────────────────────────────╮
+│ #   │ Task                     │   Min │ Priority   │ When          │ Repeats   │ Confidence   │ Fit         │ Sources                        │
+├─────┼──────────────────────────┼───────┼────────────┼───────────────┼───────────┼──────────────┼─────────────┼────────────────────────────────┤
+│ 1   │ 🍖 Morning feeding       │     5 │ 🔴 High    │ prefers 07:30 │ 🔁 daily  │ 🟢 100%      │ ✅ at 07:30 │ Feeding routine for cats [cat- │
+│     │                          │       │            │               │           │              │             │ feeding]                       │
+│ 2   │ 🍖 Evening feeding       │     5 │ 🔴 High    │ prefers 18:00 │ 🔁 daily  │ 🟢 100%      │ ✅ at 18:00 │ Feeding routine for cats [cat- │
+│     │                          │       │            │               │           │              │             │ feeding]                       │
+│ 3   │ 🍖 Monitor water intake  │     2 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 95%       │ ✅ at 07:35 │ Feeding routine for cats [cat- │
+│     │                          │       │            │               │           │              │             │ feeding]                       │
+│ 4   │ 🍖 Puzzle feeder session │    10 │ 🟡 Medium  │ any time      │ 🔁 daily  │ 🟢 90%       │ ✅ at 07:37 │ Feeding routine for cats [cat- │
+│     │                          │       │            │               │           │              │             │ feeding]                       │
+╰─────┴──────────────────────────┴───────┴────────────┴───────────────┴───────────┴──────────────┴─────────────┴────────────────────────────────╯
 (Confidence: 50% the model's own figure, 30% guide support, 20% schedule fit. Required tasks are marked ⭐.)
 ========================================================================
 Nothing added.
@@ -438,7 +438,7 @@ The outputs, pasted from those files:
 <!-- BEGIN generated:evidence-environment -->
 ```text
 $ environment
-# 2026-11-15 23:56:42 UTC | Python 3.13.15 | commit eb564b1
+# 2026-11-16 00:37:39 UTC | Python 3.13.15 | commit e40b45c
 
 Linux 7.0.14-linuxkit aarch64
 google-genai              3.3.0
@@ -455,18 +455,19 @@ wcwidth                   0.9.4
 <!-- BEGIN generated:evidence-pytest-full -->
 ```text
 $ .venv/bin/python -m pytest -q
-# 2026-11-15 23:56:06 UTC | Python 3.13.15 | commit eb564b1
+# 2026-11-16 00:36:55 UTC | Python 3.13.15 | commit e40b45c
 
-........................................................................ [ 11%]
-........................................................................ [ 22%]
-........................................................................ [ 33%]
-........................................................................ [ 45%]
-........................................................................ [ 56%]
-........................................................................ [ 67%]
-........................................................................ [ 79%]
-........................................................................ [ 90%]
-............................................................             [100%]
-636 passed in 11.07s
+........................................................................ [ 10%]
+........................................................................ [ 20%]
+........................................................................ [ 31%]
+........................................................................ [ 41%]
+........................................................................ [ 52%]
+........................................................................ [ 62%]
+........................................................................ [ 73%]
+........................................................................ [ 83%]
+........................................................................ [ 94%]
+.......................................                                  [100%]
+687 passed in 13.91s
 
 [exit status 0]
 ```
@@ -477,14 +478,14 @@ $ .venv/bin/python -m pytest -q
 <!-- BEGIN generated:evidence-pytest-original -->
 ```text
 $ .venv/bin/python -m pytest tests/test_pawpal.py tests/test_app.py tests/test_display.py tests/test_main.py tests/test_uml.py -q
-# 2026-11-15 23:56:17 UTC | Python 3.13.15 | commit eb564b1
+# 2026-11-16 00:37:09 UTC | Python 3.13.15 | commit e40b45c
 
 ........................................................................ [ 22%]
 ........................................................................ [ 45%]
 ........................................................................ [ 68%]
 ........................................................................ [ 91%]
 ..........................                                               [100%]
-314 passed in 7.64s
+314 passed in 7.80s
 
 [exit status 0]
 ```
@@ -495,19 +496,20 @@ $ .venv/bin/python -m pytest tests/test_pawpal.py tests/test_app.py tests/test_d
 <!-- BEGIN generated:evidence-pytest-no-network -->
 ```text
 $ GEMINI_API_KEY=fake-key-not-real PYTHONPATH=scripts .venv/bin/python -m pytest -p block_network -q
-# 2026-11-15 23:56:25 UTC | Python 3.13.15 | commit eb564b1
+# 2026-11-16 00:37:17 UTC | Python 3.13.15 | commit e40b45c
 
-........................................................................ [ 11%]
-........................................................................ [ 22%]
-........................................................................ [ 33%]
-........................................................................ [ 45%]
-........................................................................ [ 56%]
-........................................................................ [ 67%]
-........................................................................ [ 79%]
-........................................................................ [ 90%]
-............................................................             [100%]
+........................................................................ [ 10%]
+........................................................................ [ 20%]
+........................................................................ [ 31%]
+........................................................................ [ 41%]
+........................................................................ [ 52%]
+........................................................................ [ 62%]
+........................................................................ [ 73%]
+........................................................................ [ 83%]
+........................................................................ [ 94%]
+.......................................                                  [100%]
 NETWORK ATTEMPTS (non-loopback connect or DNS lookup): 0 []
-636 passed in 11.30s
+687 passed in 13.41s
 
 [exit status 0]
 ```
@@ -518,13 +520,15 @@ NETWORK ATTEMPTS (non-loopback connect or DNS lookup): 0 []
 <!-- BEGIN generated:evidence-pytest-per-file -->
 ```text
 $ .venv/bin/python -m pytest --collect-only -q | cut -d: -f1 | grep '^tests/' | sort | uniq -c
-# 2026-11-15 23:56:37 UTC | Python 3.13.15 | commit eb564b1
+# 2026-11-16 00:37:31 UTC | Python 3.13.15 | commit e40b45c
 
      56 tests/test_ai_assistant.py
      33 tests/test_ai_assistant_errors.py
      50 tests/test_app.py
      10 tests/test_app_assistant.py
+     16 tests/test_app_layout.py
      14 tests/test_architecture.py
+     34 tests/test_deliverables.py
      37 tests/test_display.py
      15 tests/test_display_assistant.py
      16 tests/test_dotenv.py
@@ -532,7 +536,7 @@ $ .venv/bin/python -m pytest --collect-only -q | cut -d: -f1 | grep '^tests/' | 
      47 tests/test_guardrails.py
       4 tests/test_main.py
      37 tests/test_main_assistant.py
-     27 tests/test_model_card.py
+     28 tests/test_model_card.py
     208 tests/test_pawpal.py
      23 tests/test_readme.py
      26 tests/test_retriever.py

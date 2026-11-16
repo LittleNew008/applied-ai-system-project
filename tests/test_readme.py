@@ -186,7 +186,7 @@ def test_the_invalid_pet_sample_matches_a_fresh_run(text, monkeypatch, capsys):
 def test_the_gemini_sample_is_a_recorded_live_run_with_validated_proposals(text):
     _, recorded = sample_output(text, "sample-gemini")
     assert "Mode: Gemini (" in recorded and "Care guides used:" in recorded
-    assert re.search(r"Sources.*\[cat-\w+\]", recorded, re.S)  # proposals cite real guides
+    assert "[cat-" in recorded.split("Needs:")[1].split("╭")[1]  # the table's Sources column names real guides (ids wrap across lines)
     assert "failed validation" not in recorded
 
 
