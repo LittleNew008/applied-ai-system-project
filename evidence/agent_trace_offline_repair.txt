@@ -1,0 +1,20 @@
+$ python scripts/make_agent_traces.py
+# 2026-11-16 00:37:35 UTC | 3.13.15 | commit e40b45c
+
+ 1. [control] config  model="scripted"  offline=false  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+ 2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 16}
+ 3. [plan] llm_call  call="needs"  attempt=1  model="scripted"  prompt_chars=506  response_chars=79
+      raw: {"needs": ["Medication on time"], "query_terms": ["dog", "meds", "medication"]}
+ 4. [plan] plan_needs  needs=["Medication on time"]  query_terms=["dog", "meds", "medication"]  focus_categories=["walk", "feeding", "enrichment", "grooming", "meds"]
+ 5. [retrieve] retrieve  query_terms=["dog", "meds", "medication", "med", "daily", "walk", "feeding", "enrichment", "grooming"]  model_query_terms=["dog", "meds", "medication"]  chunks=[{"id": "dog-exercise", "title": "D...
+ 6. [act] llm_call  call="proposals"  attempt=1  model="scripted"  prompt_chars=4171  response_chars=352
+      raw: {"proposals": [{"title": "Give prescribed medication", "duration_minutes": 5, "priority": "high", "category": ...
+ 7. [act] parse  proposals=1  rejected=0
+ 8. [act] validate  accepted=["Give prescribed medication"]  rejected=[]
+ 9. [check] self_check  ok=false  issues=[["error", "NEWLY_SKIPPED", "Give prescribed medication"], ["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]  scheduled_minutes=0
+10. [act] llm_call  call="repair"  attempt=1  model="scripted"  prompt_chars=4928  response_chars=352
+      raw: {"proposals": [{"title": "Give prescribed medication", "duration_minutes": 5, "priority": "high", "category": ...
+11. [act] validate  accepted=["Give prescribed medication"]  rejected=[]
+12. [act] repair  round=1  accepted=["Give prescribed medication"]  ok=true  issues=[["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]
+13. [check] score  proposals=[{"title": "Give prescribed medication", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}]
+14. [check] result  accepted=[{"title": "Give prescribed medication", "confidence": 0.95}]  rejected=[]  ok=true

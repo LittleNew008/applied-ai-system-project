@@ -69,6 +69,7 @@ flowchart TD
         T_ARCH(["tests/test_architecture.py<br/>checks this diagram against the code"])
         T_README(["tests/test_readme.py<br/>README sample runs, counts and tables"])
         T_LAYOUT(["tests/test_app_layout.py<br/>tabs, ways into the assistant, compact tiles"])
+        T_DELIV(["tests/test_deliverables.py<br/>required files exist, real agent traces recorded"])
         T_CARD(["tests/test_model_card.py<br/>limits and safeguards the model card states"])
     end
 
@@ -120,6 +121,7 @@ flowchart TD
     T_ARCH -.-> AGENT
     T_README -.-> CLI
     T_LAYOUT -.-> UI
+    T_DELIV -.-> LOG
     T_CARD -.-> AGENT
 
     classDef guard fill:#fde8e8,stroke:#b42318,stroke-width:2px
@@ -129,6 +131,6 @@ flowchart TD
     classDef core fill:#f1f1f1,stroke:#555
     class VAL,SCHEMA,CHECK guard
     class HUMAN,REVIEW human
-    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README,T_CARD,T_LAYOUT test
+    class T_IN,T_RAG,T_LLM,T_SCHEMA,T_CHECK,T_CORE,T_STORE,T_ENV,T_OUT,EVAL,T_ARCH,T_README,T_CARD,T_LAYOUT,T_DELIV test
     class PETS,GUIDES,LIVE,LOG store
     class SCHED,ADD core

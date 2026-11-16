@@ -1,4 +1,4 @@
-"""Fills the generated blocks of README.md and model_card.md from the real files they quote, so they cannot drift.
+"""Fills the generated blocks of README.md, model_card.md and ai_interactions.md from the real files they quote.
 
 The README marks each generated block like this:
 
@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 MODEL_CARD = ROOT / "model_card.md"
+INTERACTIONS = ROOT / "ai_interactions.md"
 EVIDENCE = ROOT / "evidence"
 
 # The command shown above each sample is the one a reader would type; the recorded file has the longer form
@@ -51,6 +52,7 @@ TEST_FILE_NOTES = {
     "test_dotenv.py": ".env loading and keeping it out of git",
     "test_architecture.py": "diagrams/architecture.mmd against the code",
     "test_readme.py": "this README against the files and runs it quotes",
+    "test_deliverables.py": "the required files exist, and ai_interactions.md holds real agent traces",
     "test_model_card.py": "model_card.md: its tables, numbers and every limitation it states, against the code and evidence",
 }
 
@@ -154,6 +156,15 @@ CARD_BLOCKS = {
     "injection-table": lambda: evidence_tables("injection_probe")[0],
 }
 
+# Real agent traces (scripts/make_agent_traces.py): four offline ones, and one recorded live with Gemini.
+TRACE_BLOCKS = {
+    "trace-happy": lambda: fenced("text", evidence_body("agent_trace_offline_happy")),
+    "trace-repair": lambda: fenced("text", evidence_body("agent_trace_offline_repair")),
+    "trace-fallback": lambda: fenced("text", evidence_body("agent_trace_offline_fallback")),
+    "trace-invalid": lambda: fenced("text", evidence_body("agent_trace_offline_invalid")),
+    "trace-gemini": lambda: fenced("text", evidence_body("agent_trace_gemini")),
+}
+
 BLOCKS = {
     "architecture": architecture,
     "sample-offline": lambda: sample("cli_assist_offline"),
@@ -183,7 +194,7 @@ def sync(text: str, blocks: dict | None = None, label: str = "README.md") -> str
 
 
 # Written by their own scripts (scripts/rag_comparison.py, scripts/probe_injection.py) and only with a Gemini key.
-LIVE_ONLY_EVIDENCE = {"rag_comparison", "injection_probe"}
+LIVE_ONLY_EVIDENCE = {"rag_comparison", "injection_probe", "live_sample_demo_cat_2026-11-16"}
 
 
 def evidence_problems() -> list[str]:
@@ -194,7 +205,7 @@ def evidence_problems() -> list[str]:
     """
     problems = []
     for path in sorted(EVIDENCE.glob("*.txt")):
-        if path.stem in LIVE_ONLY_EVIDENCE:
+        if path.stem in LIVE_ONLY_EVIDENCE or path.stem.startswith("agent_trace"):
             continue
         text = path.read_text(encoding="utf-8")
         if path.stem != "environment" and not text.rstrip().endswith("[exit status 0]"):
@@ -211,7 +222,8 @@ def evidence_problems() -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     check = "--check" in (sys.argv[1:] if argv is None else argv)
-    targets = [(README, BLOCKS)] + ([(MODEL_CARD, CARD_BLOCKS)] if MODEL_CARD.exists() else [])
+    targets = [(README, BLOCKS)] + [(path, blocks) for path, blocks in ((MODEL_CARD, CARD_BLOCKS), (INTERACTIONS, TRACE_BLOCKS))
+                                    if path.exists() and "BEGIN generated:" in path.read_text(encoding="utf-8")]
     problems = evidence_problems()
     for problem in problems:
         print(f"EVIDENCE PROBLEM: {problem}")

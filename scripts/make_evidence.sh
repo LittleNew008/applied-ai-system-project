@@ -40,8 +40,12 @@ run evaluate_run          "$PY evaluate.py"
 run cli_assist_offline    "printf '1\n' | env -u PAWPAL_OFFLINE OFFLINE_MODE=1 $PY main.py assist --pet biscuit"
 run cli_assist_invalid_pet "env -u PAWPAL_OFFLINE OFFLINE_MODE=1 $PY main.py assist --data evidence/bad_pet_data.json --accept none"
 
+# The agent traces for ai_interactions.md: four offline runs (deterministic), and a live one below if there is a key.
+$PY scripts/make_agent_traces.py
+
 if env -u PAWPAL_OFFLINE -u OFFLINE_MODE "$PY" -c "import ai_assistant as a; a.load_env_file(); raise SystemExit(a.AssistantConfig.from_env().offline)"; then
   run cli_assist_gemini   "env -u PAWPAL_OFFLINE -u OFFLINE_MODE $PY main.py assist --pet mochi --accept none"
+  env -u PAWPAL_OFFLINE -u OFFLINE_MODE "$PY" scripts/make_agent_traces.py --live
 else
   echo "no Gemini key or SDK: skipped cli_assist_gemini.txt (the existing file, if any, is kept)"
 fi

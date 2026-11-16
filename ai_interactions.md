@@ -186,3 +186,135 @@ Not attempted.
 **Which approach did you use in your final implementation and why?**
 
 <!-- Your conclusion -->
+
+
+## Care Assistant agent traces
+
+The Care Assistant (see [README.md](README.md) and [model_card.md](model_card.md)) logs every step of every run to `ai_trace.jsonl`
+(git-ignored): one JSON line per step, with its stage, the raw model reply, the retrieved guides and the validation results. These are
+real runs, shown through `ai_assistant.format_trace`. The first four are made by `python scripts/make_agent_traces.py` from the
+evaluation scenarios and are deterministic (the volatile `duration_ms` is left out); the fifth was recorded live with Gemini and keeps its
+real timings. `bash scripts/make_evidence.sh` re-records them and refreshes this file.
+
+**How to read a trace.** Each line is `n. [stage] step  key=value ...`. The stages are the plan, retrieve, act, check loop, plus `input`
+(the guardrail on the pet's data) and `control` (the model choice and the fallback). A line starting `raw:` is the model's reply, clipped.
+`model="scripted"` means a scripted stand-in for Gemini, used where a scenario needs one particular behaviour; `model="offline"` is the
+deterministic offline client; `model="gemini-..."` is the real model.
+
+### Trace 1: the happy path (offline)
+
+A healthy dog with no tasks. Every stage runs once: the input check passes, the needs are planned, guides are retrieved, the proposals are
+parsed and validated, the self-check finds nothing wrong, and each proposal is scored.
+
+<!-- BEGIN generated:trace-happy -->
+```text
+ 1. [control] config  model="offline"  offline=true  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+ 2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 0}
+ 3. [plan] llm_call  call="needs"  attempt=1  model="offline"  prompt_chars=490  response_chars=211
+      raw: {"needs": ["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "D...
+ 4. [plan] plan_needs  needs=["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "Dog needs grooming and hygiene"]  query_terms=["dog", "walk", "feeding", "enrichment", "groo...
+ 5. [retrieve] retrieve  query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  model_query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise f...
+ 6. [act] llm_call  call="proposals"  attempt=1  model="offline"  prompt_chars=3572  response_chars=2710
+      raw: {"proposals": [{"category": "walk", "confidence": 0.9, "description": "A brisk walk to burn energy and give th...
+ 7. [act] parse  proposals=7  rejected=0
+ 8. [act] validate  accepted=["Morning walk", "Evening walk", "Fetch or tug play", "Breakfast feeding", "Dinner feeding", "Brush coat", "Tooth brushing"]  rejected=[]
+ 9. [check] self_check  ok=true  issues=[]  scheduled_minutes=100
+10. [check] score  proposals=[{"title": "Morning walk", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}, {"title": "Evening walk", "confidence": 0.95, "detail": "model 90%, guide support...
+11. [check] result  accepted=[{"title": "Morning walk", "confidence": 0.95}, {"title": "Evening walk", "confidence": 0.95}, {"title": "Fetch or tug play", "confidence": 0.95}, {"title": "Breakfast feeding", "confidence":...
+```
+<!-- END generated:trace-happy -->
+
+### Trace 2: a problem found by the self-check, and one repair round (scripted model)
+
+The model proposes a required medication task at 23:30, after the day ends at 20:00. Step 9 is the self-check: `ok=false` with an
+`error` issue, `NEWLY_SKIPPED`, because the planner cannot place it (`scheduled_minutes=0`). Step 10 is the repair call, which feeds the
+problem back; step 12 shows the repaired result passing (`ok=true`), and the proposal is scored.
+
+<!-- BEGIN generated:trace-repair -->
+```text
+ 1. [control] config  model="scripted"  offline=false  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+ 2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 16}
+ 3. [plan] llm_call  call="needs"  attempt=1  model="scripted"  prompt_chars=506  response_chars=79
+      raw: {"needs": ["Medication on time"], "query_terms": ["dog", "meds", "medication"]}
+ 4. [plan] plan_needs  needs=["Medication on time"]  query_terms=["dog", "meds", "medication"]  focus_categories=["walk", "feeding", "enrichment", "grooming", "meds"]
+ 5. [retrieve] retrieve  query_terms=["dog", "meds", "medication", "med", "daily", "walk", "feeding", "enrichment", "grooming"]  model_query_terms=["dog", "meds", "medication"]  chunks=[{"id": "dog-exercise", "title": "D...
+ 6. [act] llm_call  call="proposals"  attempt=1  model="scripted"  prompt_chars=4171  response_chars=352
+      raw: {"proposals": [{"title": "Give prescribed medication", "duration_minutes": 5, "priority": "high", "category": ...
+ 7. [act] parse  proposals=1  rejected=0
+ 8. [act] validate  accepted=["Give prescribed medication"]  rejected=[]
+ 9. [check] self_check  ok=false  issues=[["error", "NEWLY_SKIPPED", "Give prescribed medication"], ["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]  scheduled_minutes=0
+10. [act] llm_call  call="repair"  attempt=1  model="scripted"  prompt_chars=4928  response_chars=352
+      raw: {"proposals": [{"title": "Give prescribed medication", "duration_minutes": 5, "priority": "high", "category": ...
+11. [act] validate  accepted=["Give prescribed medication"]  rejected=[]
+12. [act] repair  round=1  accepted=["Give prescribed medication"]  ok=true  issues=[["info", "REQUIRED_PROPOSED", "Give prescribed medication"]]
+13. [check] score  proposals=[{"title": "Give prescribed medication", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}]
+14. [check] result  accepted=[{"title": "Give prescribed medication", "confidence": 0.95}]  rejected=[]  ok=true
+```
+<!-- END generated:trace-repair -->
+
+### Trace 3: the model answers badly, and the offline stand-in takes over (scripted model)
+
+The scripted model replies with prose around the JSON (step 6), then with a code fence (step 8). Each is a `parse_error`, the one retry is
+used up, and step 10 is the `fallback`. Steps 11 to 19 are the same pipeline run again with the offline client (`model="offline"`).
+
+<!-- BEGIN generated:trace-fallback -->
+```text
+ 1. [control] config  model="scripted"  offline=false  reason="evaluation default"  species="dog"  max_proposals=8  max_repairs=1  date="2026-03-02"
+ 2. [input] input_check  ok=true  pet={"species": "dog", "age": 4, "special_needs_chars": 0}
+ 3. [plan] llm_call  call="needs"  attempt=1  model="scripted"  prompt_chars=482  response_chars=55
+      raw: {"needs": ["Exercise"], "query_terms": ["dog", "walk"]}
+ 4. [plan] plan_needs  needs=["Exercise"]  query_terms=["dog", "walk"]  focus_categories=["walk", "feeding", "enrichment", "grooming"]
+ 5. [retrieve] retrieve  query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  model_query_terms=["dog", "walk"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise for dogs", "score": 6.0}, {"id": "dog-...
+ 6. [act] llm_call  call="proposals"  attempt=1  model="scripted"  prompt_chars=3445  response_chars=44
+      raw: Sure! Here are some tasks: {"proposals": []}
+ 7. [act] parse_error  call="proposals"  attempt=1  error="reply is not valid JSON: Expecting value: line 1 column 1 (char 0)"
+ 8. [act] llm_call  call="proposals"  attempt=2  model="scripted"  prompt_chars=3530  response_chars=14
+      raw: ```json {} ```
+ 9. [act] parse_error  call="proposals"  attempt=2  error="reply is not valid JSON: Expecting value: line 1 column 1 (char 0)"
+10. [control] fallback  reason="ProposalError: reply is not valid JSON: Expecting value: line 1 column 1 (char 0)"
+11. [plan] llm_call  call="needs"  attempt=1  model="offline"  prompt_chars=482  response_chars=211
+      raw: {"needs": ["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "D...
+12. [plan] plan_needs  needs=["Dog needs daily walks", "Dog needs a regular feeding routine", "Dog needs play and enrichment", "Dog needs grooming and hygiene"]  query_terms=["dog", "walk", "feeding", "enrichment", "groo...
+13. [retrieve] retrieve  query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  model_query_terms=["dog", "walk", "feeding", "enrichment", "grooming"]  chunks=[{"id": "dog-exercise", "title": "Daily exercise f...
+14. [act] llm_call  call="proposals"  attempt=1  model="offline"  prompt_chars=3564  response_chars=2710
+      raw: {"proposals": [{"category": "walk", "confidence": 0.9, "description": "A brisk walk to burn energy and give th...
+15. [act] parse  proposals=7  rejected=0
+16. [act] validate  accepted=["Morning walk", "Evening walk", "Fetch or tug play", "Breakfast feeding", "Dinner feeding", "Brush coat", "Tooth brushing"]  rejected=[]
+17. [check] self_check  ok=true  issues=[]  scheduled_minutes=100
+18. [check] score  proposals=[{"title": "Morning walk", "confidence": 0.95, "detail": "model 90%, guide support 100%, schedule fit 100%"}, {"title": "Evening walk", "confidence": 0.95, "detail": "model 90%, guide support...
+19. [check] result  accepted=[{"title": "Morning walk", "confidence": 0.95}, {"title": "Evening walk", "confidence": 0.95}, {"title": "Fetch or tug play", "confidence": 0.95}, {"title": "Breakfast feeding", "confidence":...
+```
+<!-- END generated:trace-fallback -->
+
+### Trace 4: bad pet data is stopped at the input check
+
+A pet whose age is 99. The only record is `input_invalid`; there is no `llm_call`, so nothing was sent to a model.
+
+<!-- BEGIN generated:trace-invalid -->
+```text
+ 1. [input] input_invalid  problems=["pet age must be a whole number from 0 to 40, got 99"]
+```
+<!-- END generated:trace-invalid -->
+
+### Trace 5: a live run with Gemini
+
+The demo cat, with the real model. The two `llm_call` lines (needs, then proposals) show their real latency in `duration_ms` and the model's
+own reply. Gemini's wording varies from run to run, so a fresh recording will differ in the details.
+
+<!-- BEGIN generated:trace-gemini -->
+```text
+ 1. [control] config  model="gemini-3.1-flash-lite"  offline=false  reason=""  species="cat"  max_proposals=8  max_repairs=1  date="2026-11-16"
+ 2. [input] input_check  ok=true  pet={"species": "cat", "age": 2, "special_needs_chars": 0}
+ 3. [plan] llm_call  duration_ms=1924  call="needs"  attempt=1  model="gemini-3.1-flash-lite"  prompt_chars=1158  response_chars=449
+      raw: { "needs": [ "Establish a consistent daily feeding schedule", "Monitor daily water intake", "Provide interacti...
+ 4. [plan] plan_needs  needs=["Establish a consistent daily feeding schedule", "Monitor daily water intake", "Provide interactive puzzle feeders for mental stimulation", "Schedule regular dental hygiene checks", "Monitor...
+ 5. [retrieve] retrieve  query_terms=["siamese", "cat", "feeding", "guide", "adult", "nutritional", "requirements", "requirement", "dental", "teeth", "grooming", "care", "tips", "tip", "weight", "management", "interactiv...
+ 6. [act] llm_call  duration_ms=1956  call="proposals"  attempt=1  model="gemini-3.1-flash-lite"  prompt_chars=3665  response_chars=1887
+      raw: { "proposals": [ { "title": "Morning feeding", "duration_minutes": 5, "priority": "high", "category": "feeding...
+ 7. [act] parse  proposals=4  rejected=0
+ 8. [act] validate  accepted=["Morning feeding", "Evening feeding", "Monitor water intake", "Puzzle feeder session"]  rejected=[]
+ 9. [check] self_check  ok=true  issues=[]  scheduled_minutes=132
+10. [check] score  proposals=[{"title": "Morning feeding", "confidence": 1.0, "detail": "model 100%, guide support 100%, schedule fit 100%"}, {"title": "Evening feeding", "confidence": 1.0, "detail": "model 100%, guide s...
+11. [check] result  accepted=[{"title": "Morning feeding", "confidence": 1.0}, {"title": "Evening feeding", "confidence": 1.0}, {"title": "Monitor water intake", "confidence": 0.95}, {"title": "Puzzle feeder session", "c...
+```
+<!-- END generated:trace-gemini -->
